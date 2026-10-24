@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Log in — C-Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main class="narrow">
+    <div class="card">
+      <h1>C-Lab</h1>
+      <p style="color:var(--accent);opacity:.55;font-style:italic;font-weight:800">Charlie'$ Lab</p>
+      <div id="msg"></div>
+      <form id="form">
+        <div class="field"><label>Email</label><input name="email" type="email" required autocomplete="email" /></div>
+        <div class="field"><label>Password</label><input name="password" type="password" required autocomplete="current-password" /></div>
+        <button type="submit" style="width:100%">Log in</button>
+      </form>
+      <p class="muted" style="font-size:0.85rem">First time? <a href="/register.html">Create the account</a></p>
+    </div>
+  </main>
+  <script type="module">
+    import { api, tokens } from "/js/api.js";
+    import { $, flash, guestPage, onSubmit } from "/js/ui.js";
+    guestPage();
+    onSubmit($("#form"), async (d) => {
+      try {
+        const r = await api.login(d.email, d.password);
+        tokens.set(r.access, r.refresh);
+        location.href = "/";
+      } catch (e) { flash(e.message, "err"); }
+    });
+  </script>
+</body>
+</html>

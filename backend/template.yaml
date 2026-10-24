@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: C-Lab API (FastAPI on Lambda via Function URL) with a nightly price-alert schedule
+
+Parameters:
+  SecretKey:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: Neon pooled URL, e.g. postgresql://user:pass@ep-xxx-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require
+  FrontendUrl:
+    Type: String
+    Default: https://c-lab.pages.dev
+  CorsAllowedOrigins:
+    Type: String
+    Default: ""
+    Description: Comma-separated extra origins (custom domains) besides FrontendUrl.
+  CorsOriginRegex:
+    Type: String
+    Default: ""
+  SignupEmails:
+    Type: String
+    Default: ""
+    Description: Comma-separated emails allowed to sign up after the first (owner) account.
+  EmailHost:
+    Type: String
+    Default: ""
+  EmailPort:
+    Type: String
+    Default: "587"
+  EmailHostUser:
+    Type: String
+    Default: ""
+  EmailHostPassword:
+    Type: String
+    NoEcho: true
+    Default: ""
+  GoogleClientId:
+    Type: String
+    Default: ""
+    Description: OAuth client for "Sign in with Google" (read-only Gmail for EasyEquities emails).
+  GoogleClientSecret:
+    Type: String
+    NoEcho: true
+    Default: ""
+  CohereApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Cohere key for the suggestions.
+  GroqApiKeys:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Groq key(s) for Ask AI, comma separated to rotate.
+  SerpApiKeys:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: SerpAPI key(s) for SA market news, comma separated to rotate.
+  GhDispatchToken:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: GitHub token that may only run workflows on this repo (starts the Worker for the Refresh buttons).
+  GhRepo:
+    Type: String
+    Default: ""
+    Description: owner/repo that holds .github/workflows/worker.yml
+  DefaultFromEmail:
+    Type: String
+    Default: "C-Lab <noreply@example.com>"
+
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.12
+      CodeUri: .
+      Handler: app.main.handler
+      MemorySize: 1024
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: ["ses:SendEmail", "ses:SendRawEmail"]
+              Resource: "*"
+      Timeout: 300
+      Architectures: [x86_64]
+      Environment:
+        Variables:
+          SECRET_KEY: !Ref SecretKey
+          DATABASE_URL: !Ref DatabaseUrl
+          FRONTEND_URL: !Ref FrontendUrl
+          CORS_ALLOWED_ORIGINS: !Ref CorsAllowedOrigins
+          CORS_ORIGIN_REGEX: !Ref CorsOriginRegex
+          SIGNUP_EMAILS: !Ref SignupEmails
+          EMAIL_HOST: !Ref EmailHost
+          EMAIL_PORT: !Ref EmailPort
+          EMAIL_HOST_USER: !Ref EmailHostUser
+          EMAIL_HOST_PASSWORD: !Ref EmailHostPassword
+          DEFAULT_FROM_EMAIL: !Ref DefaultFromEmail
+          GOOGLE_CLIENT_ID: !Ref GoogleClientId
+          GOOGLE_CLIENT_SECRET: !Ref GoogleClientSecret
+          SES_FROM: "C-Lab <noreply@example.com>"
+          COHERE_API_KEY: !Ref CohereApiKey
+          GROQ_API_KEYS: !Ref GroqApiKeys
+          SERPAPI_KEYS: !Ref SerpApiKeys
+          GH_DISPATCH_TOKEN: !Ref GhDispatchToken
+          GH_REPO: !Ref GhRepo
+      FunctionUrlConfig:
+        AuthType: NONE
+      Events:
+        NightlyAlerts:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 16 * * ? *) # 18:00 SAST, after the JSE close
+
+  ApiFunctionUrlInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
+Outputs:
+  ApiUrl:
+    Value: !GetAtt ApiFunctionUrl.FunctionUrl

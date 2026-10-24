@@ -1,0 +1,56 @@
+C-Lab — Proprietary Software Licence
+
+Copyright (c) 2026 VICINIC (Pty) Ltd (registration number 2026/760598/07).
+All rights reserved.
+
+1. Ownership
+   This software, including its source code, design, documentation, database
+   structure and any improvements or derivative works (the "Software"), is the
+   sole property of VICINIC (Pty) Ltd ("VICINIC"). Work on the Software by any
+   person, partner or contractor is done for VICINIC, and all intellectual
+   property in it vests in VICINIC.
+
+2. No licence unless granted in writing
+   No one may copy, modify, distribute, sell, sublicense, host for others,
+   reverse engineer or otherwise use the Software except as set out in this
+   file or in a written licence signed by a director of VICINIC.
+
+3. Licence to CT Holdings and Investments (Pty) Ltd
+   VICINIC grants CT Holdings and Investments (Pty) Ltd (registration number
+   2025/230601/07) ("CT Holdings"), as VICINIC's partner, a non-exclusive,
+   non-transferable, royalty-free licence to use the hosted Software for the
+   personal finance and investment tracking of its directors, for as long as
+   the partnership between VICINIC and CT Holdings continues.
+   - CT Holdings may not copy, resell, sublicense or host the Software itself,
+     or give the source code to anyone else.
+   - Either party may end this licence on 90 days' written notice. When it
+     ends, VICINIC will give CT Holdings an export of its data.
+   - Ideas, feedback or features requested by CT Holdings and built into the
+     Software belong to VICINIC.
+   - This licence records the existing partnership. It will be replaced by,
+     and read with, any written partnership agreement the parties sign later.
+
+4. Data
+   Data that users or their clients enter into the Software belongs to them.
+   VICINIC processes it only to provide the service, in line with the
+   Protection of Personal Information Act, 2013 (POPIA) and the VICINIC
+   Privacy Policy.
+
+5. Confidentiality
+   The source code and any non-public information about the Software are
+   confidential and may not be disclosed to anyone without VICINIC's written
+   consent.
+
+6. Third-party components
+   The Software uses open-source libraries that remain under their own
+   licences. Nothing in this file changes those licences.
+
+7. No warranty
+   The Software is provided "as is", without warranty of any kind. To the
+   extent the law allows, VICINIC is not liable for any loss arising from its
+   use.
+
+8. Governing law
+   This licence is governed by the laws of the Republic of South Africa.
+
+Contact: VICINIC (Pty) Ltd · vicinic.co.za · miguel@vicinic.co.za

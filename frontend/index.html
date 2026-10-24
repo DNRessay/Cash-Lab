@@ -1,0 +1,2222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>C-Lab — Charlie'$ Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    .bar { height: 0.5rem; background: var(--border); border-radius: 999px; overflow: hidden; min-width: 80px; }
+    .bar > span { display: block; height: 100%; background: var(--accent); }
+    .big { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    section[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <nav id="nav"></nav>
+  <main>
+    <p class="muted" style="margin-top:0">Prices come from the public market feed (delayed). A personal tracker, not financial advice.</p>
+    <div id="msg"></div>
+    <div class="onboard" id="onboard" hidden>
+      <div class="onboard-card">
+        <h1>Welcome<span id="ob-name"></span> 👋</h1>
+        <p class="muted">Two quick checks open C-Lab: your email and ID. The rest is optional and you can finish it later.</p>
+        <ol class="ob-steps">
+          <li class="ob-step" data-step="email"><span class="ob-dot"></span><div><strong>Verify your email</strong> <em class="ob-tag">required</em><small class="ob-detail"></small>
+            <div class="ob-form"><button type="button" id="ob-email-send" class="small">Email me a code</button></div>
+            <form class="ob-form ob-code" id="ob-email"><input name="code" inputmode="numeric" maxlength="6" placeholder="6-digit code" required autocomplete="one-time-code" />
+              <button type="submit" class="small">Verify</button></form>
+            <small class="muted">We send a 6-digit code to your login email. It works for 15 minutes.</small></div></li>
+          <li class="ob-step" data-step="id"><span class="ob-dot"></span><div><strong>Your SA ID number</strong> <em class="ob-tag">required</em><small class="ob-detail"></small>
+            <form class="ob-form" id="ob-id"><input name="id_number" inputmode="numeric" placeholder="13 digits" required autocomplete="off" />
+              <button type="submit" class="small">Check</button></form>
+            <small class="muted">Checked with the Luhn check digit, stored encrypted, and used to open your statements.</small></div></li>
+          <li class="ob-step" data-step="easyequities"><span class="ob-dot"></span><div><strong>EasyEquities login</strong> <em class="ob-tag">optional</em><small class="ob-detail"></small>
+            <form class="ob-form" id="ob-ee"><input name="username" placeholder="EasyEquities username" required autocomplete="username" />
+              <input name="password" type="password" placeholder="Password" required autocomplete="current-password" />
+              <button type="submit" class="small">Connect</button></form>
+            <small class="muted">Read-only: C-Lab reads your accounts and holdings. Stored encrypted.</small></div></li>
+          <li class="ob-step" data-step="google"><span class="ob-dot"></span><div><strong>Google (Gmail)</strong> <em class="ob-tag">optional</em><small class="ob-detail"></small>
+            <div class="ob-form"><button type="button" id="ob-google" class="small">Sign in with Google</button></div>
+            <small class="muted">Read-only Gmail: your EasyEquities emails and bank statements.</small></div></li>
+          <li class="ob-step" data-step="statements"><span class="ob-dot"></span><div><strong>Statements open with your ID</strong> <em class="ob-tag">optional</em><small class="ob-detail"></small>
+            <div class="ob-form"><button type="button" id="ob-statements" class="small">Find my statements</button></div>
+            <small class="muted">Proof it all works: C-Lab finds at least one EasyEquities or bank statement and opens it with your ID.</small></div></li>
+        </ol>
+        <div class="row"><button type="button" id="ob-open" disabled>Open C-Lab</button><button type="button" class="secondary small" id="ob-logout">Log out</button></div>
+      </div>
+    </div>
+    <!-- Markets -->
+    <section id="markets">
+      <div class="card table-wrap"><table>
+        <thead><tr><th>Market</th><th class="num">Now</th><th>Last year</th><th class="num">Day</th><th class="num">Month</th><th class="num">Year</th><th class="num">52w range</th></tr></thead>
+        <tbody id="market-rows" class="wrap-first"></tbody>
+      </table></div>
+      <div id="sum-markets"></div>
+      <div id="deals-markets"></div>
+      <div id="pulse-markets"></div>
+      <div id="blog-wrap" hidden>
+        <h2>Dividends from EasyEquities</h2>
+        <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Declared in EasyEquities' dividends updates. Own the share by the last day to trade to get paid. <span id="blog-note"></span></p></div>
+                <div class="row" style="margin-bottom:0.6rem"><label class="muted" for="blog-sort">Sort by</label>
+          <select id="blog-sort"><option value="date">Last day to trade</option><option value="yield">Yield (this dividend)</option>
+            <option value="yield12">Yield (12 months)</option><option value="season">Season paid</option><option value="amount">Dividend amount</option></select></div>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>What</th><th class="num">Dividend</th><th class="num">Price (1 unit)</th><th class="num">Yield</th><th>Last day to trade</th><th>Paid</th><th>Status</th></tr></thead>
+          <tbody id="blog-rows"></tbody>
+        </table></div>
+        <details class="section" id="blog-paid-wrap" hidden><summary><span>Already paid</span><span class="count" id="cnt-blog-paid"></span></summary>
+          <div class="card table-wrap"><table>
+            <thead><tr><th>What</th><th class="num">Dividend</th><th class="num">Price (1 unit)</th><th class="num">Yield</th><th>Last day to trade</th><th>Paid</th><th>Status</th></tr></thead>
+            <tbody id="blog-paid-rows"></tbody>
+          </table></div></details>
+        <details class="section" id="blog-posts-wrap"><summary><span>Latest from EasyEquities</span><span class="count" id="cnt-blog"></span></summary>
+          <div class="grid" id="blog-posts"></div></details>
+      </div>
+      <div class="card" id="tech-wrap" hidden>
+        <div class="ai-head"><h3 id="tech-title">Technical view</h3><select id="tech-pick" aria-label="Pick a market or holding"></select></div>
+        <p class="muted" id="tech-reads"></p>
+        <div class="legend"><span><i style="background:var(--series-1)"></i>Price</span><span><i style="background:var(--series-2)"></i>50-day average</span><span><i style="background:var(--muted)"></i>Bollinger bands</span></div>
+        <div class="chart-box"><canvas id="tech-chart" role="img" aria-label="Price with Bollinger bands and 50-day average"></canvas></div>
+        <h3>RSI (14)</h3>
+        <div class="chart-box short"><canvas id="rsi-chart" role="img" aria-label="Relative strength index"></canvas></div>
+        <h3>MACD histogram</h3>
+        <div class="chart-box short"><canvas id="macd-chart" role="img" aria-label="MACD histogram"></canvas></div>
+      </div>
+      <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Rand pairs show rand per 1 unit of the foreign currency, so a rising number means a weaker rand.</p></div>
+    </section>
+
+    <section id="calendar" hidden>
+      <div class="ai-head"><h2>Dividend calendar</h2><button class="secondary small" id="cal-refresh">Refresh</button></div>
+      <small class="muted" id="cal-job"></small>
+      <div class="callout suggest"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Heads up</b> <span id="cal-warning"></span></p></div>
+      <div class="grid" id="cal-kpis"></div>
+      <div class="row" style="margin:0.6rem 0"><label class="muted" for="cal-show">Show</label>
+        <select id="cal-show"><option value="all">All companies</option><option value="mine">Holdings and watchlist</option><option value="declared">Declared only</option></select></div>
+      <div class="cal-strip" id="cal-strip"></div>
+      <div id="cal-months"></div>
+    </section>
+
+    <!-- Overview -->
+    <section id="overview" hidden>
+      <div class="grid" id="kpis"></div>
+      <h2>Worth over time</h2>
+      <div class="card">
+        <div class="legend"><span><i style="background:var(--series-1)"></i>Portfolio worth</span><span><i style="background:var(--series-2)"></i>Money put in</span></div>
+        <div class="chart-box"><canvas id="worth-chart" aria-label="Portfolio worth and money put in over time" role="img"></canvas></div>
+        <p class="muted" id="worth-note" style="margin:0.5rem 0 0"></p>
+      </div>
+      <div class="chart-grid">
+        <div>
+          <h2>Money in and out</h2>
+          <div class="card">
+            <div class="legend"><span><i style="background:var(--pos)"></i>Deposits</span><span><i style="background:var(--neg)"></i>Withdrawals</span></div>
+            <div class="chart-box short"><canvas id="flow-chart" role="img" aria-label="Deposits and withdrawals per month"></canvas></div>
+          </div>
+        </div>
+        <div>
+          <h2>Income and costs</h2>
+          <div class="card">
+            <div class="legend"><span><i style="background:var(--pos)"></i>Dividends + interest</span><span><i style="background:var(--neg)"></i>Fees + tax</span></div>
+            <div class="chart-box short"><canvas id="income-chart" role="img" aria-label="Dividends and interest against fees and tax per month"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <p class="muted" id="monthly-note"></p>
+      <div id="money-wrap" hidden>
+        <h2>Your money picture</h2>
+        <p class="muted" id="money-note">Banking next to your investments and property, month by month.</p>
+        <div class="chart-grid">
+          <div class="card">
+            <h3>Net worth over time</h3>
+            <div class="legend"><span><i style="background:var(--series-1)"></i>Investments</span><span><i style="background:var(--series-2)"></i>Bank</span><span><i style="background:var(--cat-3)"></i>Own property</span><span><i style="background:var(--neg)"></i>Debt</span><span><i style="background:var(--text)"></i>Net worth</span></div>
+            <div class="chart-box"><canvas id="nw-chart" role="img" aria-label="Investments, bank, property and debt per month with net worth"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>Bank: money in and out</h3>
+            <div class="legend"><span><i style="background:var(--pos)"></i>In</span><span><i style="background:var(--neg)"></i>Out</span><span><i style="background:var(--series-1)"></i>Moved into investments</span></div>
+            <div class="chart-box short"><canvas id="bank-io-chart" role="img" aria-label="Bank money in and out per month, and money moved into investments"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>Where your income went (12 months)</h3>
+            <div class="pie-row"><div class="pie-box"><canvas id="income-use-chart" role="img" aria-label="Income split into spending, investing, fees and kept"></canvas></div><ul class="pie-legend" id="income-use-legend"></ul></div>
+          </div>
+          <div class="card">
+            <h3>What your net worth is made of</h3>
+            <div class="chart-box short"><canvas id="nw-parts-chart" role="img" aria-label="Investments, property, bank and debt now"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div id="sum-overview"></div>
+      <div class="ai-box" id="ai-overview" data-section="overview"></div>
+      <div id="ee-overview" hidden>
+        <h2>EasyEquities accounts</h2>
+        <div class="card"><div class="chart-box short"><canvas id="account-chart" aria-label="Value per EasyEquities account" role="img"></canvas></div></div>
+        <div class="grid" id="ee-accounts"></div>
+      </div>
+      <div id="my-divs-wrap" hidden>
+        <h2>Your dividends</h2>
+        <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> From EasyEquities' dividends updates, for shares you hold or watch. The full list is on <a href="#markets">Markets</a>.</p></div>
+        <div class="grid" id="my-divs"></div>
+      </div>
+      <div id="decisions-wrap" hidden>
+        <h2>Needs your decision</h2>
+        <div class="card table-wrap"><table><tbody id="ee-actions"></tbody></table></div>
+      </div>
+      <h2>Same money, other choices</h2>
+      <div class="callout suggest"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Suggestion</b> <span id="bench-note"></span></p></div>
+      <div class="card table-wrap"><table>
+        <thead><tr><th></th><th class="num">Worth now</th><th class="num">Gain</th><th class="num">Return</th></tr></thead>
+        <tbody id="bench"></tbody>
+      </table></div>
+      <h2>Where it sits</h2>
+      <div class="card table-wrap"><table><tbody id="alloc"></tbody></table></div>
+    </section>
+
+    <!-- EasyEquities -->
+    <section id="easyequities" hidden>
+      <h1>EasyEquities</h1>
+      <div class="card" id="ee-status"></div>
+        <div class="card">
+          <h3>Connect EasyEquities</h3>
+          <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Reads your accounts (including EasyProperties) and holdings at EasyEquities' own prices, every night and when you press Sync. Your password is stored encrypted and only used to read.</p></div>
+          <form id="ee-platform-form">
+            <div class="field"><label>Username or email</label><input name="username" autocomplete="off" required /></div>
+            <div class="field"><label>Password</label><input name="password" type="password" autocomplete="new-password" required /></div>
+            <div class="row"><button type="submit">Connect</button><button type="button" id="ee-platform-off" class="secondary" hidden>Disconnect</button></div>
+          </form>
+        </div>
+      <div class="card">
+        <h3>Statement password</h3>
+        <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> EasyEquities locks its PDF statements, usually with your ID number. C-Lab needs it to read them (stored encrypted, only used to open your statements). <span id="pdfpw-state"></span></p></div>
+        <form id="pdfpw-form" class="row">
+          <input name="password" type="password" autocomplete="off" placeholder="PDF password" class="grow" />
+          <button type="submit">Save</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="google" hidden>
+      <h1>Google</h1>
+      <div class="card" id="google-status"></div>
+        <div class="card">
+          <h3>Sign in with Google</h3>
+          <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Reads only mail from easyequities.co.za: trade invoices, deposits, withdrawals, EasyProperties orders and corporate actions. Trades, deposits and withdrawals become transactions automatically.</p></div>
+          <div class="row" id="ee-google-row">
+            <button type="button" id="ee-google" class="gsi"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Sign in with Google</span></button>
+            <button type="button" id="ee-mail-off" class="secondary" hidden>Disconnect</button>
+          </div>
+          <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p id="ee-google-note"><b class="cl-tag">Info</b> Google asks you to allow read-only access to your mail. C-Lab only searches for mail from easyequities.co.za and for statement emails from your banks, and you can remove its access any time in your Google account.</p></div>
+        </div>
+    </section>
+
+    <!-- Holdings -->
+    <section id="holdings" hidden>
+      <div class="chart-grid" id="holding-charts" hidden>
+        <div>
+          <h2 style="margin-top:0">Biggest holdings</h2>
+          <div class="card"><div class="chart-box" id="top-box"><canvas id="top-chart" role="img" aria-label="Holdings by value"></canvas></div></div>
+        </div>
+        <div>
+          <h2 style="margin-top:0">Gain or loss</h2>
+          <div class="card">
+            <div class="legend"><span><i style="background:var(--pos)"></i>Up</span><span><i style="background:var(--neg)"></i>Down</span></div>
+            <div class="chart-box" id="gain-box"><canvas id="gain-chart" role="img" aria-label="Gain or loss per holding"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div id="sum-holdings"></div>
+      <div class="ai-box" id="ai-holdings" data-section="holdings"></div>
+      <div class="card table-wrap"><table>
+        <thead><tr><th>Holding</th><th class="num">Units</th><th class="num">Avg cost</th><th class="num">Price</th><th class="num">Value</th><th class="num">Gain</th><th class="num">Dividends</th><th></th></tr></thead>
+        <tbody id="holding-rows"></tbody>
+      </table></div>
+      <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> EasyEquities holdings use the price from your last EasyEquities sync. EasyProperties is on the Property page. Anything else without a market price? Use "Set price".</p></div>
+    </section>
+
+    <!-- Transactions -->
+    <section id="transactions" hidden>
+      <div class="search-bar">
+        <input id="tx-search" type="search" placeholder="Search transactions, statements, emails…" autocomplete="off" aria-label="Search everything on this page" />
+        <small class="muted" id="tx-search-note"></small>
+      </div>
+
+      <div class="chart-grid" id="tx-charts">
+        <div class="card" id="trade-wrap" hidden>
+          <h3>Buys and sells per month</h3>
+          <div class="legend"><span><i style="background:var(--series-1)"></i>Bought</span><span><i style="background:var(--series-2)"></i>Sold</span></div>
+          <div class="chart-box short"><canvas id="trade-chart" role="img" aria-label="Money spent buying and received selling per month"></canvas></div>
+        </div>
+        <div class="card" id="cost-wrap" hidden>
+          <h3>Where the costs went</h3>
+          <div class="pie-row"><div class="pie-box"><canvas id="cost-chart" role="img" aria-label="Fees and tax by type"></canvas></div><ul class="pie-legend" id="cost-legend"></ul></div>
+        </div>
+        <div class="card" id="income-acc-wrap" hidden>
+          <h3>Dividends and interest by account</h3>
+          <div class="pie-row"><div class="pie-box"><canvas id="income-acc-chart" role="img" aria-label="Dividends and interest by account"></canvas></div><ul class="pie-legend" id="income-acc-legend"></ul></div>
+        </div>
+        <div class="card" id="acc-io-wrap" hidden>
+          <h3>Earned vs paid, per account</h3>
+          <div class="legend"><span><i style="background:var(--pos)"></i>Dividends + interest</span><span><i style="background:var(--neg)"></i>Fees + tax</span></div>
+          <div class="chart-box" id="acc-io-box"><canvas id="acc-io-chart" role="img" aria-label="Income and costs per account"></canvas></div>
+        </div>
+      </div>
+
+      <div id="sum-transactions"></div>
+      <div class="ai-box" id="ai-transactions" data-section="transactions"></div>
+
+      <details class="section" id="sec-txns">
+        <summary><span>Your transactions</span><span class="count" id="cnt-txns"></span></summary>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>Date</th><th>Type</th><th>Holding</th><th class="num">Units</th><th class="num">Price</th><th class="num">Amount</th><th></th></tr></thead>
+          <tbody id="txn-rows"></tbody>
+        </table></div>
+      </details>
+
+      <details class="section" id="pdf-wrap" hidden>
+        <summary><span>Printable statements</span><span class="count" id="cnt-pdf"></span></summary>
+        <div class="reader-bar">
+          <div><strong>Statement reader</strong><br><small class="muted" id="reader-note"></small></div>
+          <button id="read-stmts" class="small">Read statements</button>
+        </div>
+        <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Grouped by account. <strong>View</strong> opens the PDF; <strong>Text</strong> shows what C-Lab read from it, line by line to the cent.</p></div>
+        <div id="pdf-groups"></div>
+      </details>
+
+      <details class="section" id="stmt-wrap" hidden>
+        <summary><span>Statement lines: dividends, fees and more</span><span class="count" id="cnt-stmt"></span></summary>
+        <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Every line from EasyEquities' own transaction history, totalled per account and year. Fees and tax show as negative.</p></div>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>Account · year</th><th class="num">Dividends</th><th class="num">Interest</th><th class="num">Fees</th><th class="num">Tax</th><th class="num">Deposits</th><th class="num">Withdrawals</th><th class="num">Other</th></tr></thead>
+          <tbody id="stmt-totals"></tbody>
+        </table></div>
+        <div class="row" style="margin-bottom:0.6rem">
+          <select id="stmt-cat">
+            <option value="">All lines</option><option value="dividend">Dividends</option><option value="fee">Fees</option><option value="tax">Tax</option>
+            <option value="interest">Interest</option><option value="deposit">Deposits</option><option value="withdrawal">Withdrawals</option>
+            <option value="trade">Trades</option><option value="transfer">Transfers</option><option value="other">Other</option>
+          </select>
+          <select id="stmt-acc"><option value="">All accounts</option></select>
+        </div>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>Date</th><th>Account</th><th>What</th><th>Details</th><th class="num">Amount</th></tr></thead>
+          <tbody id="stmt-rows"></tbody>
+        </table></div>
+      </details>
+
+      <details class="section" id="sec-mails">
+        <summary><span>From your EasyEquities emails</span><span class="count" id="cnt-mails"></span></summary>
+        <div class="row" style="margin-bottom:0.6rem">
+          <select id="ee-kind">
+            <option value="">Everything</option><option value="trade">Trades</option><option value="order">Property orders</option>
+            <option value="deposit">Deposits</option><option value="withdrawal">Withdrawals</option>
+            <option value="corporate_action">Corporate actions</option><option value="bundle">Bundles</option><option value="notice">Other notices</option>
+          </select>
+        </div>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>Date</th><th>What</th><th>Holding</th><th>Account</th><th class="num">Units</th><th class="num">Price</th><th class="num">Amount</th><th class="num">Costs</th><th></th></tr></thead>
+          <tbody id="ee-mails"></tbody>
+        </table></div>
+      </details>
+
+      <details class="section" id="sec-add">
+        <summary><span>Add by hand or import a CSV</span></summary>
+      <div class="card">
+        <h3>Add a transaction</h3>
+        <form id="txn-form">
+          <div class="fields">
+            <div class="field"><label>Date</label><input name="date" type="date" required /></div>
+            <div class="field"><label>Type</label>
+              <select name="kind">
+                <option value="buy">Buy</option><option value="sell">Sell</option><option value="dividend">Dividend</option>
+                <option value="deposit">Deposit (money in)</option><option value="withdrawal">Withdrawal (money out)</option>
+                <option value="fee">Fee</option><option value="interest">Interest</option>
+              </select></div>
+            <div class="field sym"><label>Symbol</label><input name="symbol" placeholder="e.g. GRT.JO" /></div>
+            <div class="field sym"><label>Kind of asset</label>
+              <select name="asset_class"><option value="share">Share</option><option value="etf">ETF</option><option value="reit">REIT / property share</option>
+                <option value="easyproperties">EasyProperties</option><option value="crypto">Crypto</option><option value="other">Other</option></select></div>
+            <div class="field trade"><label>Units</label><input name="quantity" type="number" step="any" min="0" /></div>
+            <div class="field trade"><label>Price per unit (R)</label><input name="price" type="number" step="any" min="0" /></div>
+            <div class="field"><label>Amount (R)</label><input name="amount" type="number" step="0.01" min="0" placeholder="auto for buy/sell" /></div>
+            <div class="field trade"><label>Fees (R)</label><input name="fees" type="number" step="0.01" min="0" /></div>
+          </div>
+          <button type="submit">Add</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3>Import from CSV</h3>
+        <form id="csv-form" class="row">
+          <input type="file" name="file" accept=".csv" required class="grow" />
+          <button type="submit" class="secondary">Import</button>
+        </form>
+        <p><a href="#transactions" id="template">Download the template</a>. EasyEquities trades arrive here automatically once Google is connected (Account → Google).</p>
+      </div>
+      </details>
+    </section>
+
+    <!-- Watchlist -->
+    <section id="watchlist" hidden>
+      <div class="card">
+        <form id="watch-form" class="row">
+          <input name="symbol" placeholder="Symbol, e.g. RDF.JO" required style="width:10rem" />
+          <select name="asset_class"><option value="share">Share</option><option value="reit">REIT</option><option value="etf">ETF</option><option value="other">Other</option></select>
+          <input name="alert_below" type="number" step="any" placeholder="Alert below R" style="width:9rem" />
+          <input name="alert_above" type="number" step="any" placeholder="Alert above R" style="width:9rem" />
+          <button type="submit">Watch</button>
+        </form>
+        <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> JSE symbols end in <code>.JO</code>. Property shares to try: GRT.JO (Growthpoint), RDF.JO (Redefine), FFB.JO (Fortress), VKE.JO (Vukile), STXPRO.JO (Satrix Property ETF). Alerts are checked nightly and emailed to you.</p></div>
+      </div>
+      <details class="section" id="picks-wrap" hidden>
+        <summary><span>Dividend picks from EasyEquities</span><span class="count" id="cnt-picks"></span></summary>
+        <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Still time to buy before the last day to trade. <strong>Watch</strong> looks up the ticker and adds it here. <span id="picks-refresh-note"></span></p></div>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>What</th><th class="num">Dividend</th><th class="num">Price (1 unit)</th><th class="num">Yield</th><th>Last day to trade</th><th>Paid</th><th></th></tr></thead>
+          <tbody id="picks"></tbody>
+        </table></div>
+        <button class="secondary small" id="blog-refresh">Check the blog now</button>
+      </details>
+      <div class="card table-wrap"><table>
+        <thead><tr><th>Symbol</th><th class="num">Price</th><th>Last year</th><th class="num">Day</th><th class="num">Month</th><th class="num">Year</th><th class="num">Div. yield</th><th class="num">52w range</th><th>Alerts</th><th></th></tr></thead>
+        <tbody id="watch-rows"></tbody>
+      </table></div>
+      <div id="sum-watchlist"></div>
+      <div class="ai-box" id="ai-watchlist" data-section="watchlist"></div>
+    </section>
+
+    <!-- Property -->
+    <section id="property" hidden>
+      <div id="sum-property"></div>
+      <div class="ai-box" id="ai-property" data-section="property"></div>
+      <div id="ep-wrap" hidden>
+        <h2 style="margin-top:0">EasyProperties</h2>
+        <div class="chart-grid">
+          <div class="card">
+            <h3>Bought for vs worth now</h3>
+            <div class="legend"><span><i style="background:var(--series-2)"></i>Bought for</span><span><i style="background:var(--series-1)"></i>Worth now</span></div>
+            <div class="chart-box" id="ep-value-box"><canvas id="ep-value-chart" role="img" aria-label="What each property cost and is worth now"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>Rental yield</h3>
+            <div class="chart-box" id="ep-yield-box"><canvas id="ep-yield-chart" role="img" aria-label="Rental yield per property"></canvas></div>
+          </div>
+        </div>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>Property</th><th class="num">Value</th><th class="num">Bought for</th><th class="num">Gain</th><th class="num">Rental yield</th><th class="num">Rent received</th></tr></thead>
+          <tbody id="ep-rows"></tbody>
+        </table></div>
+        <h2>Your own property</h2>
+      </div>
+      <div class="card table-wrap"><table>
+        <thead><tr><th>Property</th><th class="num">Value</th><th class="num">Bond</th><th class="num">Equity</th><th class="num">Net yield</th><th class="num">Cash / month</th><th class="num">Growth / yr</th><th></th></tr></thead>
+        <tbody id="prop-rows"></tbody>
+      </table></div>
+      <div class="card">
+        <h3 id="prop-title">Add a property</h3>
+        <form id="prop-form">
+          <input type="hidden" name="id" />
+          <div class="fields">
+            <div class="field"><label>Name</label><input name="name" required placeholder="e.g. Block L rental" /></div>
+            <div class="field"><label>Type</label><select name="kind"><option value="house">House</option><option value="flat">Flat</option><option value="land">Land</option><option value="commercial">Commercial</option></select></div>
+            <div class="field"><label>Bought on</label><input name="purchase_date" type="date" /></div>
+            <div class="field"><label>Bought for (R)</label><input name="purchase_price" type="number" step="0.01" min="0" /></div>
+            <div class="field"><label>Worth now (R)</label><input name="valuation" type="number" step="0.01" min="0" /></div>
+            <div class="field"><label>Valued on</label><input name="valuation_date" type="date" /></div>
+            <div class="field"><label>Bond owing (R)</label><input name="bond_balance" type="number" step="0.01" min="0" /></div>
+            <div class="field"><label>Bond payment / month (R)</label><input name="monthly_bond_payment" type="number" step="0.01" min="0" /></div>
+            <div class="field"><label>Rent / month (R)</label><input name="monthly_rent" type="number" step="0.01" min="0" /></div>
+            <div class="field"><label>Costs / month (R)</label><input name="monthly_costs" type="number" step="0.01" min="0" placeholder="rates, levies, insurance, upkeep" /></div>
+          </div>
+          <div class="field"><label>Notes</label><input name="notes" /></div>
+          <div class="row"><button type="submit">Save</button><button type="button" id="prop-cancel" class="secondary" hidden>Cancel</button></div>
+        </form>
+      </div>
+    </section>
+    <!-- Account -->
+    <section id="profile" hidden>
+      <h1>Profile</h1>
+      <div class="card">
+        <h3 id="who"></h3>
+        <form id="pw-form">
+          <div class="fields">
+            <div class="field"><label>Current password</label><input name="old_password" type="password" required autocomplete="current-password" /></div>
+            <div class="field"><label>New password</label><input name="new_password" type="password" required minlength="8" autocomplete="new-password" /></div>
+          </div>
+          <button type="submit">Change password</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3>Connect apps</h3>
+        <p class="muted">Lets an assistant such as your assistant read your money here (read-only: it can't change anything or move money). Paste the address and key into the app. You can revoke a key any time.</p>
+        <div class="row"><input id="mcp-name" placeholder="Key name, e.g. your assistant" class="grow" /><button id="mcp-create" class="small">Create key</button></div>
+        <div id="mcp-new" hidden>
+          <p><b>Address</b> <code id="mcp-url"></code></p>
+          <p><b>Key</b> (shown once) <code id="mcp-key"></code></p>
+        </div>
+        <table><tbody id="mcp-keys"></tbody></table>
+      </div>
+    </section>
+    <!-- Banking -->
+    <section id="banking" hidden>
+      <div class="grid" id="bank-kpis"></div>
+      <div class="reader-bar">
+        <div><strong>Bank statements from Gmail</strong><br><small class="muted" id="bank-note"></small></div>
+        <div class="row"><button id="bank-read" class="small">Read bank statements</button><button id="bank-tidy" class="secondary small">Tidy categories</button></div>
+      </div>
+
+      <div class="chart-grid" id="bank-charts" hidden>
+        <div class="card">
+          <h3>What you own vs what you owe</h3>
+          <div class="chart-box short" id="bank-worth-box"><canvas id="bank-worth-chart" role="img" aria-label="Assets and debts"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Money in and out per month</h3>
+          <div class="legend"><span><i style="background:var(--pos)"></i>In</span><span><i style="background:var(--neg)"></i>Out (spending + fees)</span></div>
+          <div class="chart-box short"><canvas id="bank-flow-chart" role="img" aria-label="Money in and out per month, transfers left out"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>Where the money came from (last 12 months)</h3>
+          <div class="pie-row"><div class="pie-box"><canvas id="bank-in-chart" role="img" aria-label="Money in by source"></canvas></div><ul class="pie-legend" id="bank-in-legend"></ul></div>
+        </div>
+        <div class="card">
+          <h3>Where the money went (last 12 months)</h3>
+          <div class="pie-row"><div class="pie-box"><canvas id="bank-cat-chart" role="img" aria-label="Spending by category"></canvas></div><ul class="pie-legend" id="bank-cat-legend"></ul></div>
+        </div>
+        <div class="card">
+          <h3>Bank fees per month</h3>
+          <div class="chart-box short"><canvas id="bank-fee-chart" role="img" aria-label="Bank fees per month"></canvas></div>
+        </div>
+      </div>
+
+      <div id="sum-banking"></div>
+      <div class="ai-box" id="ai-banking" data-section="banking"></div>
+
+      <h2>Your banks</h2>
+      <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Each account's standing is the balance on its latest transaction. Wrong type? Change it: credit cards and loans count as debt.</p></div>
+      <div id="bank-accounts"></div>
+
+      <h2>Debts you add yourself</h2>
+      <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Car finance, a personal loan, store accounts, money you owe someone. Home loans go on the Property page (bond).</p></div>
+      <div class="grid" id="liabilities"></div>
+      <details class="section" id="sec-liab-add">
+        <summary><span>Add a debt</span></summary>
+        <form id="liab-form" class="card">
+          <div class="fields">
+            <div class="field"><label>Name</label><input name="name" required placeholder="e.g. Polo finance" /></div>
+            <div class="field"><label>Type</label><select name="kind"><option value="vehicle">Vehicle finance</option><option value="loan">Personal loan</option>
+              <option value="credit">Credit card</option><option value="store">Store account</option><option value="personal">Owed to someone</option><option value="other">Other</option></select></div>
+            <div class="field"><label>Still owing (R)</label><input name="balance" type="number" step="0.01" min="0" required /></div>
+            <div class="field"><label>Interest % a year</label><input name="rate" type="number" step="0.01" /></div>
+            <div class="field"><label>Monthly payment (R)</label><input name="monthly" type="number" step="0.01" /></div>
+          </div>
+          <button type="submit">Add debt</button>
+        </form>
+      </details>
+
+      <div class="search-bar">
+        <input id="bank-search" type="search" placeholder="Search bank transactions…" autocomplete="off" aria-label="Search bank transactions" />
+        <small class="muted" id="bank-search-note"></small>
+      </div>
+      <details class="section" id="sec-bank-txns">
+        <summary><span>Bank transactions</span><span class="count" id="cnt-bank"></span></summary>
+        <div class="row" style="margin-bottom:0.6rem">
+          <select id="bank-cat"><option value="">All categories</option></select>
+          <select id="bank-acc"><option value="">All accounts</option></select>
+        </div>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>Date</th><th>What</th><th>Account</th><th class="num">Amount</th><th class="num">Fee</th><th class="num">Balance</th></tr></thead>
+          <tbody id="bank-rows"></tbody>
+        </table></div>
+      </details>
+      <details class="section" id="sec-bank-stmts">
+        <summary><span>Statements read</span><span class="count" id="cnt-bank-stmts"></span></summary>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>Received</th><th>Account</th><th>Status</th><th class="num">Lines</th><th class="num">Closing balance</th><th></th></tr></thead>
+          <tbody id="bank-stmts"></tbody>
+        </table></div>
+      </details>
+    </section>
+    <!-- Reports -->
+    <section id="reports" hidden>
+      <div class="card no-print report-controls">
+        <div class="row">
+          <select id="rep-preset" aria-label="Period">
+            <option value="this-month">This month</option><option value="last-month">Last month</option>
+            <option value="3m">Last 3 months</option><option value="6m">Last 6 months</option><option value="12m" selected>Last 12 months</option>
+            <option value="tax">This tax year (Mar–Feb)</option><option value="last-tax">Last tax year</option><option value="custom">Custom…</option>
+          </select>
+          <input type="date" id="rep-start" aria-label="From" /><input type="date" id="rep-end" aria-label="To" />
+          <button type="button" id="rep-make">Make report</button>
+          <button type="button" class="secondary" id="rep-print">Print / save PDF</button>
+        </div>
+        <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Built from your EasyEquities, bank statements and property. Print it, or choose "Save as PDF" in the print dialog.</p></div>
+      </div>
+      <article id="report-doc" class="report-doc"></article>
+    </section>
+
+    <!-- Ask AI -->
+    <section id="ai" hidden>
+      <div class="ai-app">
+        <aside class="ai-side" id="ai-side" aria-label="Your chats">
+          <div class="ai-side-head">
+            <a href="#overview" class="ai-back" title="Back to C-Lab">← C-Lab</a>
+            <button type="button" id="ai-new" class="small">+ New chat</button>
+          </div>
+          <div class="ai-chats" id="ai-chats"></div>
+          <p class="ai-side-foot"><small>Groq, using your C-Lab totals only (no account numbers). Not financial advice.</small></p>
+        </aside>
+        <div class="ai-scrim" id="ai-scrim"></div>
+        <div class="ai-main">
+          <header class="ai-top">
+            <button type="button" class="ai-icon-btn" id="ai-side-toggle" aria-label="Show chats">☰</button>
+            <div class="ai-top-title"><strong id="ai-title">Ask AI</strong><small class="muted" id="ai-topic"></small></div>
+            <a href="#overview" class="ai-icon-btn" aria-label="Close">✕</a>
+          </header>
+          <div class="ai-log" id="chat-log" aria-live="polite"></div>
+          <div class="ai-bottom">
+            <div class="chips" id="chat-chips"></div>
+            <form id="chat-form" class="ai-composer">
+              <textarea name="q" rows="1" placeholder="Ask about your money…" required></textarea>
+              <button type="submit" aria-label="Send">↑</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+    import { api } from "/js/api.js";
+    import { API_BASE } from "/js/config.js";
+    import { $, $$, action, amount, badge, day, download, empty, esc, flash, money, onSubmit, page, pct, setActive } from "/js/ui.js";
+
+    const PAGES = [["markets", "Markets"], ["calendar", "Calendar"], ["overview", "Portfolio"], ["holdings", "Holdings"], ["transactions", "Transactions"],
+      ["ai", "Ask AI"], ["banking", "Banking"], ["watchlist", "Watchlist"], ["property", "Property"], ["reports", "Reports"],
+      ["account", "Account", [["profile", "Profile"], ["easyequities", "EasyEquities"], ["google", "Google"]]]];
+    page(PAGES);
+
+    const CLASS = { share: "Shares", etf: "ETFs", reit: "Property shares", easyproperties: "EasyProperties", crypto: "Crypto", other: "Other", cash: "Cash" };
+    const TYPE = { buy: "Buy", sell: "Sell", dividend: "Dividend", deposit: "Deposit", withdrawal: "Withdrawal", fee: "Fee", interest: "Interest" };
+    const signed = (v) => `<span class="${v < 0 ? "neg" : "pos"}">${money(v)}</span>`;
+    const pctCell = (v) => `<td class="num ${v == null ? "" : v < 0 ? "neg" : "pos"}">${pct(v)}</td>`;
+    const units = (v) => v == null ? "" : Number(v).toLocaleString("en-ZA", { maximumFractionDigits: 4 });
+
+    async function loadSummary() {
+      const s = await api.investSummary();
+      renderEEOverview(s);
+      renderBlog(s.blog);
+      lastSummary = s;
+      api.investMoney().then(mp => renderMoney(mp, s)).catch(e => flash(e.message, "err"));
+      summaryOverview(s);
+      summaryHoldings(s);
+      renderCharts(s);
+      renderHoldingCharts(s);
+      api.investCharts().then(renderMonthly).catch(e => flash(e.message, "err"));
+      loadDecisions().catch(e => flash(e.message, "err"));
+      const kpi = (label, value, sub = "") => `<div class="card stat"><div class="value">${value}</div><div class="label">${label}${sub ? `<br>${sub}` : ""}</div></div>`;
+      $("#kpis").innerHTML =
+        kpi("Portfolio worth", money(s.value), s.cash == null ? "" : s.cash < 0 ? `after ${money(-s.cash)} owed to EasyEquities` : `incl. ${money(s.cash)} cash`) +
+        kpi(s.easyequities && !s.since ? "Cost of holdings + cash" : "Money put in", money(s.invested), s.since ? `since ${s.since}` : s.easyequities?.taken_at ? `EasyEquities, ${ago(s.easyequities.taken_at)}` : "") +
+        kpi("Gain", signed(s.gain), pct(s.return_pct)) +
+        (s.income ? kpi("Dividends + interest", money(s.income.dividend + s.income.interest), "all time, from EasyEquities") +
+          kpi("Fees + tax paid", `<span class="neg">${money(s.income.fee + s.income.tax)}</span>`, `fees ${money(s.income.fee)} · tax ${money(s.income.tax)}`) : "") +
+        kpi("Property equity", money(s.property_equity), s.easyproperties_value ? `incl. ${money(s.easyproperties_value)} EasyProperties` : "") +
+        (s.banking?.accounts || s.banking?.debt ? kpi("Bank − debt", signed(s.banking.cash - s.banking.debt), `bank ${money(s.banking.cash)} · debt ${money(s.banking.debt)}`) : "") +
+        kpi("Real net worth", money(s.net_worth), s.banking?.accounts || s.banking?.debt ? "incl. bank and debts" : "<a href=\"#banking\">add your bank</a>");
+
+      $("#bench-note").textContent = s.invested
+        ? "If every rand you put in had gone into these instead, on the same days (price growth only, dividends not included):"
+        : "Add your deposits or buys to see this.";
+      const maxV = Math.max(s.value, ...s.benchmarks.map(b => b.value), 1);
+      const row = (label, v, gain, ret, strong) => `<tr><td>${strong ? `<strong>${label}</strong>` : label}<div class="bar"><span style="width:${Math.max(0, v / maxV * 100)}%"></span></div></td>
+        <td class="num">${money(v)}</td><td class="num">${signed(gain)}</td>${pctCell(ret)}</tr>`;
+      $("#bench").innerHTML = s.invested ? row("Your portfolio", s.value, s.gain, s.return_pct, true) +
+        s.benchmarks.map(b => row(esc(b.label), b.value, b.gain, b.return_pct)).join("") : empty(4, "Nothing to compare yet.");
+
+      const total = Object.values(s.allocation).reduce((a, b) => a + b, 0) || 1;
+      $("#alloc").innerHTML = Object.entries(s.allocation).map(([k, v]) => `<tr><td>${CLASS[k] || esc(k)}<div class="bar"><span style="width:${v / total * 100}%"></span></div></td>
+        <td class="num">${money(v)}</td><td class="num">${(v / total * 100).toFixed(0)}%</td></tr>`).join("") || empty(3, "No holdings yet.");
+
+      // Holdings = EasyEquities shares, ETFs etc.; EasyProperties lives on the Property page.
+      const shares = s.holdings.filter(h => h.asset_class !== "easyproperties");
+      $("#holding-rows").innerHTML = shares.map(h => `<tr>
+        <td><strong>${esc(h.symbol)}</strong><br><small class="muted">${esc(h.name)} · ${CLASS[h.asset_class] || esc(h.asset_class)}${h.account ? ` · ${esc(h.account)}` : ""}</small></td>
+        <td class="num">${units(h.quantity)}</td><td class="num">${money(h.avg_cost)}</td>
+        <td class="num">${money(h.price)}<br><small class="muted">${esc(h.price_source)}</small></td>
+        <td class="num">${money(h.value)}</td>
+        <td class="num">${signed(h.gain)}<br><small>${pct(h.gain_pct)}</small></td>
+        <td class="num">${money(h.dividends)}</td>
+        <td>${h.account ? "" : `<button class="secondary small setprice" data-s="${esc(h.symbol)}">Set price</button>`}</td></tr>`).join("") || empty(8, "No holdings yet — add transactions first.");
+      $$(".setprice").forEach(b => b.addEventListener("click", async () => {
+        const v = prompt(`Latest price for ${b.dataset.s} in rand (leave empty to go back to the market price):`);
+        if (v === null) return;
+        try {
+          if (v.trim()) await api.setManualPrice(b.dataset.s, v.trim()); else await api.clearManualPrice(b.dataset.s);
+          loadSummary();
+        } catch (e) { flash(e.message, "err"); }
+      }));
+    }
+
+    // transactions
+    const txnForm = $("#txn-form");
+    txnForm.date.valueAsDate = new Date();
+    const syncTxnFields = () => {
+      const k = txnForm.kind.value, trade = ["buy", "sell"].includes(k);
+      $$(".trade", txnForm).forEach(f => f.hidden = !trade);
+      $$(".sym", txnForm).forEach(f => f.hidden = !(trade || k === "dividend"));
+      txnForm.amount.placeholder = trade ? "auto: units × price" : "";
+    };
+    txnForm.kind.addEventListener("change", syncTxnFields);
+    syncTxnFields();
+
+    async function loadTxns() {
+      loadStatement().catch(e => flash(e.message, "err"));
+      loadEEMails().catch(e => flash(e.message, "err"));
+      api.investCharts().then(renderTradeChart).catch(e => flash(e.message, "err"));
+      const rows = await api.investTxns();
+      $("#txn-rows").innerHTML = rows.map(t => `<tr><td>${t.date}</td><td>${TYPE[t.kind] || esc(t.kind)}</td>
+        <td>${esc(t.symbol)}${t.name ? `<br><small class="muted">${esc(t.name)}</small>` : ""}</td>
+        <td class="num">${units(t.quantity)}</td><td class="num">${t.price != null ? money(t.price) : ""}</td><td class="num">${money(t.amount)}</td>
+        <td><button class="secondary small del" data-id="${t.id}">Delete</button></td></tr>`).join("") || empty(7, "No transactions yet.");
+      $("#cnt-txns").textContent = rows.length;
+      applySearch();
+      $$("#txn-rows .del").forEach(b => b.addEventListener("click", async () => {
+        if (!confirm("Delete this transaction?")) return;
+        try { await api.deleteInvestTxn(b.dataset.id); loadTxns(); } catch (e) { flash(e.message, "err"); }
+      }));
+    }
+    onSubmit(txnForm, async (d) => {
+      const trade = ["buy", "sell"].includes(d.kind);
+      const body = { date: d.date, kind: d.kind, amount: d.amount || null, fees: trade ? d.fees || 0 : 0 };
+      if (trade || d.kind === "dividend") Object.assign(body, { symbol: d.symbol, asset_class: d.asset_class });
+      if (trade) Object.assign(body, { quantity: d.quantity || null, price: d.price || null });
+      await api.addInvestTxn(body);
+      flash("Added.");
+      txnForm.reset(); txnForm.date.valueAsDate = new Date(); syncTxnFields();
+      loadTxns();
+    });
+    onSubmit($("#csv-form"), async (_, e) => {
+      const r = await api.importInvestCsv(new FormData(e.target));
+      flash(`Imported ${r.imported}, skipped ${r.duplicates} already there.${r.errors.length ? " Problems: " + r.errors.join("; ") : ""}`, r.errors.length ? "warn" : "ok");
+      e.target.reset();
+      loadTxns();
+    });
+    $("#template").addEventListener("click", (e) => { e.preventDefault(); download(api.investTemplate(), "investments_template.csv").catch(err => flash(err.message, "err")); });
+
+    // watchlist
+    let watchRows = null, picksOpen = null;
+    async function loadWatch() {
+      loadPicks().catch(e => flash(e.message, "err"));
+      const rows = await api.watchlist();
+      watchRows = rows;
+      summaryWatch(rows, picksOpen);
+      $("#watch-rows").innerHTML = rows.map(w => `<tr>
+        <td><strong>${esc(w.symbol)}</strong><br><small class="muted">${esc(w.name)}</small></td>
+        <td class="num">${w.price != null ? money(w.price) : badge("no price", "warn")}</td>
+        <td>${sparkline(w.spark, w.change_1y)}</td>
+        ${pctCell(w.change_1d)}${pctCell(w.change_1m)}${pctCell(w.change_1y)}
+        <td class="num">${w.dividend_yield != null ? (w.dividend_yield * 100).toFixed(1) + "%" : "—"}</td>
+        <td class="num"><small>${w.low_52w != null ? `${money(w.low_52w)} – ${money(w.high_52w)}` : ""}</small></td>
+        <td><small>${w.alert_below != null ? `below ${money(w.alert_below)}<br>` : ""}${w.alert_above != null ? `above ${money(w.alert_above)}` : ""}</small></td>
+        <td class="row"><button class="secondary small alerts" data-id="${w.id}">Alerts</button><button class="secondary small del" data-id="${w.id}">Remove</button></td></tr>`).join("") || empty(10, "Nothing on your watchlist yet.");
+      $$("#watch-rows .del").forEach(b => b.addEventListener("click", async () => {
+        try { await api.deleteWatch(b.dataset.id); loadWatch(); } catch (e) { flash(e.message, "err"); }
+      }));
+      $$("#watch-rows .alerts").forEach(b => b.addEventListener("click", async () => {
+        const w = rows.find(r => r.id == b.dataset.id);
+        const below = prompt(`Email me when ${w.symbol} drops below R (empty = off):`, w.alert_below ?? "");
+        if (below === null) return;
+        const above = prompt(`Email me when ${w.symbol} rises above R (empty = off):`, w.alert_above ?? "");
+        if (above === null) return;
+        try { await api.updateWatch(w.id, { alert_below: below.trim() || null, alert_above: above.trim() || null }); loadWatch(); }
+        catch (e) { flash(e.message, "err"); }
+      }));
+    }
+    onSubmit($("#watch-form"), async (d, e) => {
+      await api.addWatch({ ...d, alert_below: d.alert_below || null, alert_above: d.alert_above || null });
+      e.target.reset();
+      loadWatch();
+    });
+
+    // property
+    const propForm = $("#prop-form");
+    let props = [];
+    async function loadProps() {
+      api.investSummary().then(s => {
+        const ep = s.holdings.filter(h => h.asset_class === "easyproperties");
+        $("#ep-wrap").hidden = !ep.length;
+        renderPropertyCharts(ep);
+        api.properties().then(own => summaryProperty(s, own)).catch(() => {});
+        $("#ep-rows").innerHTML = ep.map(h => `<tr><td><strong>${esc(h.name)}</strong><br><small class="muted">${esc(h.account || h.symbol)}</small></td>
+          <td class="num">${money(h.value)}</td><td class="num">${money(h.cost)}</td>
+          <td class="num">${signed(h.gain)}<br><small>${pct(h.gain_pct)}</small></td>
+          <td class="num">${h.rental_yield != null ? (h.rental_yield * 100).toFixed(2) + "%" : "—"}</td>
+          <td class="num">${h.rental_income != null ? money(h.rental_income) : ""}</td></tr>`).join("") +
+          `<tr><td><strong>Total</strong></td><td class="num"><strong>${money(ep.reduce((a, h) => a + h.value, 0))}</strong></td>
+          <td class="num">${money(ep.reduce((a, h) => a + h.cost, 0))}</td><td class="num">${signed(ep.reduce((a, h) => a + h.gain, 0))}</td><td></td>
+          <td class="num">${money(ep.reduce((a, h) => a + (h.rental_income || 0), 0))}</td></tr>`;
+      }).catch(e => flash(e.message, "err"));
+      props = await api.properties();
+      $("#prop-rows").innerHTML = props.map(p => `<tr>
+        <td><strong>${esc(p.name)}</strong><br><small class="muted">${esc(p.kind)}${p.valuation_date ? ` · valued ${p.valuation_date}` : ""}</small></td>
+        <td class="num">${money(p.valuation)}</td><td class="num">${money(p.bond_balance)}</td><td class="num">${money(p.equity)}</td>
+        <td class="num">${p.net_yield != null ? (p.net_yield * 100).toFixed(1) + "%" : "—"}</td>
+        <td class="num">${signed(p.monthly_cashflow)}</td>${pctCell(p.growth_per_year)}
+        <td class="row"><button class="secondary small edit" data-id="${p.id}">Edit</button><button class="secondary small del" data-id="${p.id}">Delete</button></td></tr>`).join("") || empty(8, "No properties yet.");
+      $$("#prop-rows .edit").forEach(b => b.addEventListener("click", () => {
+        const p = props.find(x => x.id == b.dataset.id);
+        for (const el of propForm.elements) if (el.name && el.name in p) el.value = p[el.name] ?? "";
+        propForm.id.value = p.id;
+        $("#prop-title").textContent = `Edit ${p.name}`;
+        $("#prop-cancel").hidden = false;
+        propForm.scrollIntoView({ behavior: "smooth" });
+      }));
+      $$("#prop-rows .del").forEach(b => b.addEventListener("click", async () => {
+        if (!confirm("Delete this property?")) return;
+        try { await api.deleteProperty(b.dataset.id); loadProps(); } catch (e) { flash(e.message, "err"); }
+      }));
+    }
+    const resetProp = () => { propForm.reset(); propForm.id.value = ""; $("#prop-title").textContent = "Add a property"; $("#prop-cancel").hidden = true; };
+    $("#prop-cancel").addEventListener("click", resetProp);
+    onSubmit(propForm, async (d) => {
+      const id = d.id; delete d.id;
+      if (id) await api.updateProperty(id, d); else await api.addProperty(d);
+      flash("Saved.");
+      resetProp();
+      loadProps();
+    });
+
+    // markets
+    async function loadMarkets() {
+      const { markets } = await api.markets();
+      const fmt = (m, v) => v == null ? "—" : m.kind === "fx" ? `R ${v.toFixed(4)}` : m.symbol.endsWith(".JO") ? money(v) : v.toLocaleString("en-ZA", { maximumFractionDigits: 2 });
+      $("#market-rows").innerHTML = markets.map(m => `<tr>
+        <td><strong>${esc(m.label)}</strong><br><small class="muted">${esc(m.symbol)}</small></td>
+        <td class="num">${m.price != null ? fmt(m, m.price) : badge("no data", "warn")}</td>
+        <td>${sparkline(m.spark, m.change_1y)}</td>
+        ${pctCell(m.change_1d)}${pctCell(m.change_1m)}${pctCell(m.change_1y)}
+        <td class="num"><small>${m.low_52w != null ? `${fmt(m, m.low_52w)} – ${fmt(m, m.high_52w)}` : ""}</small></td></tr>`).join("");
+      summaryMarkets(markets);
+      loadPulse("#pulse-markets", false).catch(() => {});
+      loadDeals().catch(() => {});
+      api.blog().then(renderBlog).catch(() => {});
+    }
+
+    // account
+    async function loadAccount() {
+      const me = await api.me();
+      $("#who").textContent = `${me.first_name} ${me.last_name} · ${me.email}`;
+      renderKeys(await api.mcpKeys());
+    }
+    function renderKeys(keys) {
+      $("#mcp-keys").innerHTML = keys.length ? keys.map(k =>
+        `<tr><td>${esc(k.name)} <small class="muted">…${esc(k.hint)}</small></td>` +
+        `<td><small class="muted">${k.last_used_at ? `used ${day(k.last_used_at)}` : "never used"}</small></td>` +
+        `<td><button class="secondary small" data-revoke="${k.id}">Revoke</button></td></tr>`).join("") : empty(3, "No keys yet.");
+      $$("[data-revoke]").forEach(b => action(b, async () => {
+        if (!confirm("Revoke this key? Apps using it stop working.")) return;
+        await api.mcpRevokeKey(b.dataset.revoke);
+        renderKeys(await api.mcpKeys());
+      }));
+    }
+    action($("#mcp-create"), async () => {
+      const k = await api.mcpCreateKey($("#mcp-name").value || "your assistant");
+      $("#mcp-url").textContent = `${API_BASE}/mcp`;
+      $("#mcp-key").textContent = k.key;
+      $("#mcp-new").hidden = false;
+      $("#mcp-name").value = "";
+      renderKeys(await api.mcpKeys());
+    });
+    onSubmit($("#pw-form"), async (d, e) => { flash((await api.changePassword(d)).message); e.target.reset(); });
+
+    // EasyEquities (connections page)
+    const KIND = { trade: ["Trade", ""], order: ["Property order", "warn"], deposit: ["Deposit", "ok"], withdrawal: ["Withdrawal", ""],
+      corporate_action: ["Corporate action", "warn"], bundle: ["Bundle", ""], notice: ["Notice", ""] };
+    const CAT = { dividend: ["Dividend", "ok"], interest: ["Interest", "ok"], fee: ["Fee", "err"], tax: ["Tax", "err"], deposit: ["Deposit", ""],
+      withdrawal: ["Withdrawal", ""], trade: ["Trade", ""], transfer: ["Transfer", ""], other: ["Other", "warn"] };
+    const cur = (v, c) => v == null ? "" : c && c !== "ZAR" ? `${Number(v) < 0 ? "-" : ""}${c === "USD" ? "$" : c === "GBP" ? "£" : c + " "}${amount(v)}` : money(v);
+    const ago = (iso) => iso ? new Date(iso + "Z").toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" }) : "never";
+
+    function renderEE(e) {
+      const p = e.platform, m = e.mail;
+      const line = (label, c, ok, err, extra) => `<div style="margin-bottom:0.5rem"><strong>${label}</strong> ${
+        !c ? badge("not connected") : ok === "ok" ? badge("working", "ok") : ok === "error" ? badge("failing", "err") : badge("waiting")} ${extra}
+        ${err ? `<div class="msg err" style="margin:0.4rem 0 0">${esc(err)}</div>` : ""}</div>`;
+      const warnings = e.accounts.flatMap(a => a.warnings.map(w => `${a.name}: ${w}`));
+      $("#ee-status").innerHTML =
+        line("EasyEquities login", p.connected, p.status, p.error ? `Stopped at "${p.error_stage}": ${p.error}. Showing the last good read from ${ago(p.synced_at)}.` : "",
+          p.connected ? `<small class="muted">${esc(p.username)} · last good read ${ago(p.synced_at)} · ${e.accounts.length} account(s)</small>` : "") +
+        (warnings.length ? `<div class="msg warn">${warnings.map(esc).join("<br>")}</div>` : "") +
+        `<div class="row"><button id="ee-sync" ${p.connected ? "" : "disabled"}>Sync now</button></div>
+        <p class="muted" style="margin:0.6rem 0 0">Your EasyEquities numbers show on Portfolio, Holdings, Transactions and Property. Demo accounts are left out.</p>`;
+      $("#google-status").innerHTML =
+        line("EasyEquities emails", m.connected, m.status, m.error,
+          m.connected ? `<small class="muted">${esc(m.address)}${m.method === "app_password" ? " (app password)" : ""} · checked ${ago(m.synced_at)}</small>` : "") +
+        `<div class="row"><button id="google-sync" ${m.connected ? "" : "disabled"}>Check for new emails</button>
+          <button id="ee-reparse" class="secondary" ${m.connected ? "" : "hidden"}>Re-read all emails</button></div>
+        <p class="muted" style="margin:0.6rem 0 0">Trades, deposits and withdrawals from these emails appear on Transactions; dividend decisions on Portfolio.</p>`;
+      action($("#google-sync"), async () => {
+        const r = await api.eeSync();
+        flash(`Checked.${r.new_emails ? ` ${r.new_emails} new email(s).` : " No new emails."}`);
+        renderEE(r);
+      });
+      action($("#ee-sync"), async () => {
+        const r = await api.eeSync();
+        flash(`Synced.${r.new_emails ? ` ${r.new_emails} new email(s).` : ""}`);
+        renderEE(r);
+      });
+      action($("#ee-reparse"), async () => {
+        const r = await api.eeReparse();
+        flash(`Re-read ${r.emails} emails: ${r.parsed} understood, ${r.imported} new transaction(s).`);
+      });
+      $("#ee-platform-off").hidden = !p.connected;
+      $("#ee-mail-off").hidden = !m.connected;
+      if (p.connected) $("#ee-platform-form").username.value = p.username;
+      $("#ee-google span").textContent = m.method === "google" ? "Switch Google account" : "Sign in with Google";
+      $("#ee-google").disabled = !m.google_available;
+      if (!m.google_available) $("#ee-google-note").textContent = "Google sign-in isn't switched on for this app yet.";
+    }
+    const loadEE = async () => {
+      renderEE(await api.ee());
+      const r = await api.eeReaderStatus().catch(() => null);
+      if (r) $("#pdfpw-state").innerHTML = r.pdf_password_set ? badge("saved", "ok") : badge("not set", "warn");
+    };
+    onSubmit($("#pdfpw-form"), async (d, e) => {
+      const r = await api.eeSetPdfPassword(d.password);
+      e.target.reset();
+      $("#pdfpw-state").innerHTML = r.pdf_password_set ? badge("saved", "ok") : badge("not set", "warn");
+      flash("Saved. Statements that failed will be read again on the next batch.");
+    });
+    onSubmit($("#ee-platform-form"), async (d, e) => {
+      flash("Logging in to EasyEquities… this can take a minute.", "warn");
+      const r = await api.eeConnectPlatform(d);
+      e.target.password.value = "";
+      renderEE(r);
+      flash(r.platform.status === "ok" ? "Connected. See Portfolio, Holdings and Transactions." : `Saved, but the first read failed: ${r.platform.error}`, r.platform.status === "ok" ? "ok" : "err");
+    });
+    action($("#ee-google"), async () => {
+      const { url } = await api.eeGoogleStart();
+      location.href = url;  // Google's own sign-in screen; it sends you back here
+    });
+    // Back from Google: ?google=ok|error[&detail=...]
+    (() => {
+      const q = new URLSearchParams(location.search), g = q.get("google");
+      if (!g) return;
+      flash(g === "ok" ? "Google connected. Your EasyEquities emails are on the Transactions page." : `Google sign-in didn't finish: ${q.get("detail") || "unknown error"}`,
+        g === "ok" ? "ok" : "err");
+      history.replaceState(null, "", location.pathname + "#google");
+    })();
+    action($("#ee-platform-off"), async () => { if (confirm("Disconnect EasyEquities and forget the password?")) renderEE(await api.eeDisconnectPlatform()); });
+    action($("#ee-mail-off"), async () => { if (confirm("Disconnect Google? C-Lab will stop reading your EasyEquities emails.")) renderEE(await api.eeDisconnectMail()); });
+
+    // EasyEquities data on the other pages
+    // charts (Chart.js). Series colours come from CSS tokens validated for the dark surface.
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    const charts = {};
+    function chart(id, config) {
+      if (!window.Chart) return;
+      charts[id]?.destroy();
+      Chart.defaults.color = css("--muted");
+      Chart.defaults.borderColor = "rgba(255,255,255,0.06)";
+      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+      charts[id] = new Chart($(id), config);
+    }
+    const randTick = (v) => "R " + Number(v).toLocaleString("en-ZA", { maximumFractionDigits: 0 });
+    const tooltip = { backgroundColor: css("--panel-2"), borderColor: css("--accent"), borderWidth: 1, titleColor: css("--text"),
+      bodyColor: css("--text"), padding: 10, callbacks: { label: (c) => ` ${c.dataset.label}: ${money(c.parsed.y ?? c.parsed.x)}` } };
+
+    function renderCharts(s) {
+      // Month-ends from the statements, then C-Lab's own daily points after the last statement.
+      const monthly = (s.statement_history || []).map(p => ({ date: p.month, value: p.value, invested: p.invested }));
+      const lastMonth = monthly.length ? monthly[monthly.length - 1].date : "";
+      const h = [...monthly, ...(s.history || []).filter(p => p.date.slice(0, 7) > lastMonth)];
+      $("#worth-note").textContent = h.length < 2
+        ? "C-Lab saves your numbers once a day, so this line grows from today."
+        : monthly.length
+          ? `Month-ends from ${monthly.length} EasyEquities statements, then daily. Tap for the numbers.`
+          : `Since ${h[0].date}. Hover or tap for the numbers on a day.`;
+      chart("#worth-chart", {
+        type: "line",
+        data: { labels: h.map(p => p.date.length === 7 ? monthLabel(p.date) : p.date), datasets: [
+          { label: "Portfolio worth", data: h.map(p => p.value), borderColor: css("--series-1"), backgroundColor: css("--series-1"),
+            borderWidth: 2, pointRadius: h.length < 20 ? 4 : 0, pointHoverRadius: 5, tension: 0.25 },
+          { label: "Money put in", data: h.map(p => p.invested), borderColor: css("--series-2"), backgroundColor: css("--series-2"),
+            borderWidth: 2, pointRadius: h.length < 20 ? 4 : 0, pointHoverRadius: 5, stepped: true },
+        ] },
+        options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+          plugins: { legend: { display: false }, tooltip },
+          scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6 } }, y: { ticks: { callback: randTick, maxTicksLimit: 5 } } } },
+      });
+      const acc = s.easyequities?.accounts || [];
+      if (acc.length) chart("#account-chart", {
+        type: "bar",
+        data: { labels: acc.map(a => a.name), datasets: [{ label: "Value", data: acc.map(a => a.value_zar), backgroundColor: css("--series-1"),
+          borderRadius: 4, borderSkipped: "start", maxBarThickness: 22 }] },
+        options: { indexAxis: "y", maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip },
+          scales: { x: { ticks: { callback: randTick, maxTicksLimit: 5 } }, y: { grid: { display: false } } } },
+      });
+    }
+
+    // Sparkline: one thin line, last point marked; no axes (the table has the numbers).
+    function sparkline(values, change) {
+      if (!values || values.length < 2) return "";
+      const w = 110, h = 30, pad = 3, lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
+      const pts = values.map((v, i) => [pad + i * (w - 2 * pad) / (values.length - 1), h - pad - (v - lo) / span * (h - 2 * pad)]);
+      const colour = change == null ? css("--muted") : change < 0 ? css("--neg") : css("--pos");
+      const [lx, ly] = pts[pts.length - 1];
+      return `<svg class="spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="Price over the last year${change != null ? `, ${pct(change)}` : ""}">
+        <polyline fill="none" stroke="${colour}" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round" points="${pts.map(p => p.map(n => n.toFixed(1)).join(",")).join(" ")}"/>
+        <circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="2.5" fill="${colour}"/></svg>`;
+    }
+    const monthLabel = (m) => new Date(m + "-01").toLocaleDateString("en-ZA", { month: "short", year: "2-digit" });
+    const sizeBox = (id, rows) => { $(id).style.height = `${Math.max(140, rows * 30 + 40)}px`; };
+    const barScales = { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, autoSkip: true } },
+      y: { ticks: { callback: randTick, maxTicksLimit: 5 } } };
+
+    // Two opposite things on one axis: first above zero, second below.
+    function upDownChart(id, labels, up, down, upLabel, downLabel) {
+      chart(id, {
+        type: "bar",
+        data: { labels: labels.map(monthLabel), datasets: [
+          { label: upLabel, data: up, backgroundColor: css("--pos"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 18 },
+          { label: downLabel, data: down.map(v => -v), backgroundColor: css("--neg"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 18 },
+        ] },
+        options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+          plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { label: (c) => ` ${c.dataset.label}: ${money(Math.abs(c.parsed.y))}` } } },
+          scales: { ...barScales, x: { ...barScales.x, stacked: true }, y: { ...barScales.y, stacked: true } } },
+      });
+    }
+
+    function renderMonthly(c) {
+      const any = (arr) => arr.some(v => v);
+      $("#monthly-note").textContent = c.months.length
+        ? "Months come from your EasyEquities emails and statement history. Tap a bar for the amounts."
+        : "Connect EasyEquities (and Google for your email history) to fill these in.";
+      if (!c.months.length) return;
+      upDownChart("#flow-chart", c.months, c.money_in, c.money_out, "Deposits", "Withdrawals");
+      upDownChart("#income-chart", c.months, c.income, c.costs, "Dividends + interest", "Fees + tax");
+      $("#flow-chart").closest(".card").hidden = !any(c.money_in) && !any(c.money_out);
+      $("#income-chart").closest(".card").hidden = !any(c.income) && !any(c.costs);
+    }
+
+    function hbar(id, labels, values, colours, opts = {}) {
+      chart(id, {
+        type: "bar",
+        data: { labels, datasets: [{ label: opts.label || "Value", data: values, backgroundColor: colours, borderRadius: 4,
+          borderSkipped: "start", maxBarThickness: 18 }] },
+        options: { indexAxis: "y", maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { label: opts.format ||
+            ((c) => ` ${c.dataset.label}: ${money(c.parsed.x)}`) } } },
+          scales: { x: { ticks: { callback: opts.tick || randTick, maxTicksLimit: 5 } }, y: { grid: { display: false },
+            ticks: { callback: function (v) { const l = this.getLabelForValue(v); return l.length > 22 ? l.slice(0, 21) + "…" : l; } } } } },
+      });
+    }
+
+    function renderHoldingCharts(s) {
+      const rows = s.holdings.filter(h => h.value > 0 && h.asset_class !== "easyproperties");
+      $("#holding-charts").hidden = !rows.length;
+      if (!rows.length) return;
+      const top = [...rows].sort((a, b) => b.value - a.value).slice(0, 12);
+      sizeBox("#top-box", top.length);
+      hbar("#top-chart", top.map(h => h.name || h.symbol), top.map(h => h.value), css("--series-1"));
+      const movers = rows.filter(h => h.cost).sort((a, b) => Math.abs(b.gain) - Math.abs(a.gain)).slice(0, 12);
+      sizeBox("#gain-box", movers.length);
+      hbar("#gain-chart", movers.map(h => h.name || h.symbol), movers.map(h => h.gain),
+        movers.map(h => h.gain < 0 ? css("--neg") : css("--pos")),
+        { label: "Gain", format: (c) => ` ${c.parsed.x < 0 ? "Loss" : "Gain"}: ${money(c.parsed.x)} (${pct(movers[c.dataIndex].gain_pct)})` });
+    }
+
+    function renderPropertyCharts(ep) {
+      if (!ep.length) return;
+      const rows = [...ep].sort((a, b) => b.value - a.value);
+      sizeBox("#ep-value-box", rows.length * 1.6);
+      chart("#ep-value-chart", {
+        type: "bar",
+        data: { labels: rows.map(h => h.name), datasets: [
+          { label: "Bought for", data: rows.map(h => h.cost), backgroundColor: css("--series-2"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 12 },
+          { label: "Worth now", data: rows.map(h => h.value), backgroundColor: css("--series-1"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 12 },
+        ] },
+        options: { indexAxis: "y", maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+          datasets: { bar: { categoryPercentage: 0.8, barPercentage: 0.9 } },
+          plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { label: (c) => ` ${c.dataset.label}: ${money(c.parsed.x)}` } } },
+          scales: { x: { ticks: { callback: randTick, maxTicksLimit: 5 } }, y: { grid: { display: false } } } },
+      });
+      const y = rows.filter(h => h.rental_yield != null).sort((a, b) => b.rental_yield - a.rental_yield);
+      $("#ep-yield-chart").closest(".card").hidden = !y.length;
+      sizeBox("#ep-yield-box", y.length);
+      hbar("#ep-yield-chart", y.map(h => h.name), y.map(h => h.rental_yield * 100), css("--series-1"),
+        { label: "Rental yield", tick: (v) => v + "%", format: (c) => ` Rental yield: ${c.parsed.x.toFixed(2)}%` });
+    }
+
+    function renderTradeChart(c) {
+      const has = c.buys.some(v => v) || c.sells.some(v => v);
+      $("#trade-wrap").hidden = !has;
+      if (!has) return;
+      chart("#trade-chart", {
+        type: "bar",
+        data: { labels: c.months.map(monthLabel), datasets: [
+          { label: "Bought", data: c.buys, backgroundColor: css("--series-1"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 14 },
+          { label: "Sold", data: c.sells, backgroundColor: css("--series-2"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 14 },
+        ] },
+        options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+          plugins: { legend: { display: false }, tooltip }, scales: barScales },
+      });
+    }
+
+    function renderEEOverview(s) {
+      const ee = s.easyequities;
+      $("#ee-overview").hidden = !ee;
+      if (!ee) return;
+      $("#ee-accounts").innerHTML = ee.accounts.map(a => `<div class="card stat"><div class="value">${money(a.value_zar)}</div>
+        <div class="label">${esc(a.name)}${a.currency !== "ZAR" ? ` · ${cur(a.value, a.currency)}` : ""}<br>
+        ${a.holdings} holding(s)${a.cash_zar >= 0.01 ? ` · ${money(a.cash_zar)} cash` : a.cash_zar <= -0.01 ? ` · <span class="neg">${money(a.cash_zar)} funds to invest</span>` : ""}${a.warnings.length ? `<br>${badge("check EasyEquities page", "warn")}` : ""}</div></div>`).join("");
+    }
+    async function loadDecisions() {
+      const rows = (await api.eeMails("corporate_action")).filter(m => !m.done);
+      $("#decisions-wrap").hidden = !rows.length;
+      $("#ee-actions").innerHTML = rows.map(m => `<tr><td>${day(m.received_at)}</td><td><strong>${esc(m.instrument)}</strong><br><small class="muted">${esc(m.subject)}</small></td>
+        <td><div class="row"><button class="secondary small ee-open" data-id="${m.id}">Read</button><button class="secondary small ee-done" data-id="${m.id}">Dealt with</button></div></td></tr>`).join("");
+      bindMailButtons(loadDecisions);
+    }
+    function bindMailButtons(reload) {
+      $$(".ee-open").forEach(b => b.onclick = async () => {
+        try { const m = await api.eeMail(b.dataset.id); alert(`${m.subject}\n\n${m.body.slice(0, 3000)}`); } catch (e) { flash(e.message, "err"); }
+      });
+      $$(".ee-done").forEach(b => b.onclick = async () => {
+        try { await api.eeUpdateMail(b.dataset.id, { done: true }); reload(); } catch (e) { flash(e.message, "err"); }
+      });
+    }
+
+    let stmt = { rows: [], totals: [] };
+    function renderStatement() {
+      const cat = $("#stmt-cat").value, acc = $("#stmt-acc").value;
+      const n = (t, k) => t[k] ? `<span class="${t[k] < 0 ? "neg" : ""}">${cur(t[k], t.currency)}</span>` : "";
+      $("#stmt-totals").innerHTML = stmt.totals.filter(t => !acc || t.account === acc).map(t => `<tr><td><strong>${esc(t.account)}</strong> · ${esc(t.year)}</td>
+        <td class="num">${n(t, "dividend")}</td><td class="num">${n(t, "interest")}</td><td class="num">${n(t, "fee")}</td><td class="num">${n(t, "tax")}</td>
+        <td class="num">${n(t, "deposit")}</td><td class="num">${n(t, "withdrawal")}</td><td class="num">${n(t, "other")}</td></tr>`).join("") || empty(8, "No statement lines yet.");
+      const rows = stmt.rows.filter(r => (!cat || r.category === cat) && (!acc || r.account === acc)).slice(0, 500);
+      $("#stmt-rows").innerHTML = rows.map(r => { const [label, cls] = CAT[r.category] || [r.category, ""]; return `<tr><td>${esc(r.date)}</td><td><small>${esc(r.account)}</small></td>
+        <td>${badge(label, cls)}</td><td>${esc(r.comment || r.action)}${r.contract_code ? `<br><small class="muted">${esc(r.contract_code)}</small>` : ""}</td>
+        <td class="num ${r.amount < 0 ? "neg" : ""}">${cur(r.amount, r.currency)}</td></tr>`; }).join("") || empty(5, "Nothing here.");
+    }
+    $("#stmt-cat").addEventListener("change", () => { renderStatement(); applySearch(); });
+    $("#stmt-acc").addEventListener("change", () => { renderStatement(); applySearch(); });
+    // Printable statements: account → type (Monthly / Tax) → compact cards with View and Download.
+    const periodLabel = (p) => /^\d{4}-\d{2}$/.test(p) ? new Date(p + "-01").toLocaleDateString("en-ZA", { month: "long", year: "numeric" }) : (p || "");
+    async function openPdf(id, name, inline) {
+      const w = inline ? window.open("", "_blank") : null;  // open now, so the browser doesn't block it as a pop-up
+      try {
+        flash("Fetching the statement from EasyEquities…", "warn");
+        const res = await api.eeStatementPdf(id, inline);
+        const url = URL.createObjectURL(await res.blob());
+        if (w) { w.location.href = url; flash("Opened in a new tab."); }
+        else { Object.assign(document.createElement("a"), { href: url, download: name }).click(); flash("Downloaded."); }
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (e) { w?.close(); flash(e.message, "err"); }
+    }
+    async function loadPdfs() {
+      const rows = await api.eeStatements();
+      $("#pdf-wrap").hidden = !rows.length;
+      $("#cnt-pdf").textContent = rows.length;
+      const byAcc = {};
+      rows.forEach(r => ((byAcc[r.account] ||= {})[r.kind] ||= []).push(r));
+      const KINDS = { monthly: "Monthly statements", tax: "Tax statements", other: "Other documents" };
+      $("#pdf-groups").innerHTML = Object.entries(byAcc).map(([acc, kinds]) => {
+        const n = Object.values(kinds).reduce((a, l) => a + l.length, 0);
+        return `<details class="group-card"><summary><span>${esc(acc)}</span><span class="count">${n}</span></summary>
+          ${Object.entries(kinds).map(([k, list]) => `<h4>${KINDS[k] || esc(k)}</h4><div class="docs">
+            ${list.sort((a, b) => (b.period || "").localeCompare(a.period || "")).map(r => `<div class="doc" data-search="${esc(r.name)}">
+              <div class="doc-main"><strong>${esc(periodLabel(r.period) || "Statement")} ${r.read ? badge(`read · ${r.lines}`, "ok") : ""}</strong><small class="muted" title="${esc(r.name)}">${esc(r.name)}</small></div>
+              <div class="row">${r.read ? `<button class="secondary small pdf-text" data-id="${r.id}" title="${r.lines} money lines">Text</button>` : ""}
+                <button class="secondary small pdf-view" data-id="${r.id}" data-name="${esc(r.name)}">View</button>
+                <button class="secondary small pdf-dl" data-id="${r.id}" data-name="${esc(r.name)}">Download</button></div></div>`).join("")}
+          </div>`).join("")}</details>`;
+      }).join("");
+      $$("#pdf-groups .pdf-view").forEach(b => b.onclick = () => openPdf(b.dataset.id, b.dataset.name, true));
+      $$("#pdf-groups .pdf-dl").forEach(b => b.onclick = () => openPdf(b.dataset.id, b.dataset.name, false));
+      $$("#pdf-groups .pdf-text").forEach(b => b.onclick = () => showStatementText(b.dataset.id));
+      const read = rows.filter(r => r.read).length;
+      $("#reader-note").textContent = `${read} of ${rows.length} statements read into C-Lab` +
+        (read < rows.length ? ". The nightly sync reads 25 more each night, or press Read statements." : ". All read.");
+      $("#read-stmts").hidden = read >= rows.length;
+      applySearch();
+    }
+
+    action($("#read-stmts"), async () => {
+      flash("Reading statements from EasyEquities… about a minute for 25.", "warn");
+      const r = await api.eeReadStatements();
+      flash(`Read ${r.read_now} statement(s), ${r.lines_now} money lines. ${r.left ? r.left + " left." : "All done."}`);
+      loadStatement();
+    });
+    async function showStatementText(id) {
+      const d = await api.eeStatementText(id);
+      const box = document.createElement("div");
+      box.className = "modal";
+      box.innerHTML = `<div class="modal-card" role="dialog" aria-label="${esc(d.name)}">
+        <div class="modal-head"><strong>${esc(d.name)}</strong><button class="secondary small modal-x" aria-label="Close">Close</button></div>
+        <h3>Money lines found (${d.lines.length})</h3>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th class="num">Balance</th></tr></thead>
+        <tbody>${d.lines.map(l => `<tr><td>${esc(l.date || "")}</td><td>${esc(l.description)} ${badge((CAT[l.category] || [l.category])[0], (CAT[l.category] || [])[1] || "")}</td>
+          <td class="num ${l.amount < 0 ? "neg" : ""}">${l.amount != null ? (l.amount < 0 ? "-" : "") + amount(l.amount) : ""}</td>
+          <td class="num">${l.balance != null ? (l.balance < 0 ? "-" : "") + amount(l.balance) : ""}</td></tr>`).join("")
+          || empty(4, "No money lines recognised in this statement yet.")}</tbody></table></div>
+        <details><summary>Full text as read</summary><pre>${esc(d.text)}</pre></details></div>`;
+      document.body.appendChild(box);
+      const close = () => box.remove();
+      box.addEventListener("click", (e) => { if (e.target === box || e.target.closest(".modal-x")) close(); });
+      document.addEventListener("keydown", function esc_(e) { if (e.key === "Escape") { close(); document.removeEventListener("keydown", esc_); } });
+    }
+
+    // Statement charts: costs by type and income by account (pies), earned vs paid per account (bars).
+    const CATS = ["--cat-1", "--cat-2", "--cat-3", "--cat-4", "--cat-5", "--cat-6"];
+    function pie(id, legendId, items) {
+      const top = items.slice(0, 5), rest = items.slice(5).reduce((a, x) => a + x.value, 0);
+      const data = rest > 0 ? [...top, { label: "Everything else", value: rest }] : top;
+      const total = data.reduce((a, x) => a + x.value, 0) || 1;
+      const colours = data.map((_, i) => css(CATS[i]));
+      chart(id, {
+        type: "doughnut",
+        data: { labels: data.map(x => x.label), datasets: [{ data: data.map(x => x.value), backgroundColor: colours,
+          borderColor: css("--panel"), borderWidth: 2, hoverOffset: 6 }] },
+        options: { maintainAspectRatio: false, cutout: "58%", plugins: { legend: { display: false },
+          tooltip: { ...tooltip, callbacks: { label: (c) => ` ${c.label}: ${money(c.parsed)} (${(c.parsed / total * 100).toFixed(0)}%)` } } } },
+      });
+      $(legendId).innerHTML = data.map((x, i) => `<li><i style="background:${colours[i]}"></i><span>${esc(x.label)}</span>
+        <b>${money(x.value)}</b><small class="muted">${(x.value / total * 100).toFixed(0)}%</small></li>`).join("");
+    }
+    function renderStatementCharts(t) {
+      const costs = (t.cost_types || []).filter(x => x.amount > 0).map(x => ({ label: x.type, value: x.amount }));
+      $("#cost-wrap").hidden = !costs.length;
+      if (costs.length) pie("#cost-chart", "#cost-legend", costs);
+      const inc = (t.by_account || []).filter(a => a.income > 0).map(a => ({ label: a.account, value: a.income }));
+      $("#income-acc-wrap").hidden = !inc.length;
+      if (inc.length) pie("#income-acc-chart", "#income-acc-legend", inc);
+      const accs = (t.by_account || []).filter(a => a.income || a.costs);
+      $("#acc-io-wrap").hidden = !accs.length;
+      if (!accs.length) return;
+      sizeBox("#acc-io-box", accs.length * 1.7);
+      chart("#acc-io-chart", {
+        type: "bar",
+        data: { labels: accs.map(a => a.account), datasets: [
+          { label: "Dividends + interest", data: accs.map(a => a.income), backgroundColor: css("--pos"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 12 },
+          { label: "Fees + tax", data: accs.map(a => a.costs), backgroundColor: css("--neg"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 12 },
+        ] },
+        options: { indexAxis: "y", maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+          plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { label: (c) => ` ${c.dataset.label}: ${money(c.parsed.x)}` } } },
+          scales: { x: { ticks: { callback: randTick, maxTicksLimit: 5 } }, y: { grid: { display: false } } } },
+      });
+    }
+
+    async function loadStatement() {
+      loadPdfs().catch(e => flash(e.message, "err"));
+      stmt = await api.eeTransactions();
+      $("#stmt-wrap").hidden = !stmt.rows.length;
+      $("#cnt-stmt").textContent = stmt.rows.length;
+      const accounts = [...new Set(stmt.rows.map(r => r.account))];
+      $("#stmt-acc").innerHTML = `<option value="">All accounts</option>` + accounts.map(a => `<option>${esc(a)}</option>`).join("");
+      renderStatement();
+      renderStatementCharts(stmt);
+      summaryTransactions(stmt);
+      applySearch();
+    }
+
+    // One search for the whole page: filters rows/cards, opens the sections (and account groups) that have matches.
+    let searchTimer;
+    function applySearch() {
+      const q = ($("#tx-search").value || "").trim().toLowerCase();
+      const sections = $$("#transactions details.section");
+      let total = 0;
+      sections.forEach(sec => {
+        const items = $$("tbody tr, .doc", sec);
+        let hits = 0;
+        items.forEach(el => {
+          const text = (el.textContent + " " + (el.dataset.search || "")).toLowerCase();
+          const hit = !q || text.includes(q);
+          el.classList.toggle("filtered-out", !hit);
+          if (hit && q) hits++;
+        });
+        $$(".group-card", sec).forEach(g => {
+          const any = !q || $$(".doc:not(.filtered-out)", g).length > 0;
+          g.classList.toggle("filtered-out", !any);
+          if (q) g.open = any;
+        });
+        if (q) {
+          if (sec.dataset.wasOpen === undefined) sec.dataset.wasOpen = sec.open ? "1" : "";
+          sec.open = hits > 0;
+          sec.classList.toggle("no-hits", hits === 0);
+        } else if (sec.dataset.wasOpen !== undefined) {
+          sec.open = sec.dataset.wasOpen === "1";
+          delete sec.dataset.wasOpen;
+          sec.classList.remove("no-hits");
+        }
+        total += hits;
+      });
+      $("#tx-search-note").textContent = q ? (total ? `${total} match${total === 1 ? "" : "es"}` : "No matches") : "";
+      $("#tx-charts").classList.toggle("filtered-out", !!q);  // results first while searching
+    }
+    $("#tx-search").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(applySearch, 150); });
+
+    async function loadEEMails() {
+      const rows = await api.eeMails($("#ee-kind").value);
+      $("#ee-mails").innerHTML = rows.map(m => { const [label, cls] = KIND[m.kind] || [m.kind, ""]; return `<tr>
+        <td>${m.date || day(m.received_at)}</td>
+        <td>${badge(label + (m.side && m.kind !== "deposit" && m.kind !== "withdrawal" ? ` · ${m.side}` : ""), cls)}${m.txn_id ? "<br><small class='muted'>in your transactions</small>" : ""}${!m.parsed && m.kind !== "notice" ? "<br><small class='neg'>couldn't read</small>" : ""}</td>
+        <td>${esc(m.instrument || m.subject)}</td><td><small>${esc(m.account)}</small></td>
+        <td class="num">${units(m.quantity)}</td><td class="num">${cur(m.price, m.currency)}</td>
+        <td class="num">${cur(m.value, m.currency)}</td><td class="num">${cur(m.costs, m.currency)}</td>
+        <td><button class="secondary small ee-open" data-id="${m.id}">Read</button></td></tr>`; }).join("") || empty(9, "No EasyEquities emails yet. Sign in with Google under Account → Google.");
+      $("#cnt-mails").textContent = rows.length;
+      bindMailButtons(loadEEMails);
+      applySearch();
+    }
+    $("#ee-kind").addEventListener("change", () => loadEEMails().catch(e => flash(e.message, "err")));
+
+    // banking
+    const ACC_KIND = { bank: "Bank account", credit: "Credit card", loan: "Loan" };
+    const LKIND = { vehicle: "Vehicle finance", loan: "Personal loan", credit: "Credit card", store: "Store account", personal: "Owed to someone", other: "Other" };
+    let bankRows = [];
+    async function loadBank() {
+      const [b, s] = await Promise.all([api.bank(), api.investSummary()]);
+      const st = b.status;
+      const kpi = (label, value, sub = "") => `<div class="card stat"><div class="value">${value}</div><div class="label">${label}${sub ? `<br>${sub}` : ""}</div></div>`;
+      $("#bank-kpis").innerHTML =
+        kpi("Money in the bank", money(b.cash), `${b.accounts.filter(a => !a.hidden).length} account(s)`) +
+        kpi("Debt", `<span class="neg">${money(b.debt)}</span>`, `${b.accounts.filter(a => a.kind !== "bank").length} card/loan · ${b.liabilities.length} added`) +
+        kpi("Bank fees", `<span class="neg">${money(b.fees_12m)}</span>`, "last 12 months") +
+        kpi("Real net worth", signed(s.net_worth), "investments + property + bank − debt");
+      $("#bank-note").innerHTML = !st.google ? `Sign in with Google first (<a href="#google">Account ▸ Google</a>).`
+        : `${st.ok} read · ${st.transactions} transactions${st.locked ? ` · ${st.locked} locked (${st.pdf_password_set ? "the saved PDF password didn't open them" : `set the PDF password on <a href="#easyequities">EasyEquities</a>, banks usually use your ID number too`})` : ""}${st.failed ? ` · ${st.failed} failed` : ""}`;
+      $("#bank-read").disabled = !st.google;
+      summaryBanking(b);
+
+      const own = s.value + (s.properties || []).reduce((a, p) => a + p.equity, 0);
+      $("#bank-charts").hidden = !(b.accounts.length || b.liabilities.length || b.months.length);
+      hbar("#bank-worth-chart", ["Investments + property", "Bank", "Debt"], [own, b.cash, -b.debt],
+        [css("--series-1"), css("--series-2"), css("--neg")]);
+      // Money in includes what reached the accounts without a statement line (balances rose by more than the lines explain).
+      upDownChart("#bank-flow-chart", b.months.map(m => m.month), b.months.map(m => m.in + (m.unrecorded_in || 0)), b.months.map(m => m.out), "In", "Out");
+      const incats = Object.entries(b.income_categories || {}).map(([label, value]) => ({ label, value }));
+      $("#bank-in-chart").closest(".card").hidden = !incats.length;
+      if (incats.length) pie("#bank-in-chart", "#bank-in-legend", incats);
+      const cats = Object.entries(b.categories).map(([label, value]) => ({ label, value }));
+      $("#bank-cat-chart").closest(".card").hidden = !cats.length;
+      if (cats.length) pie("#bank-cat-chart", "#bank-cat-legend", cats);
+      chart("#bank-fee-chart", { type: "bar",
+        data: { labels: b.months.map(m => monthLabel(m.month)), datasets: [{ label: "Fees", data: b.months.map(m => m.fees),
+          backgroundColor: css("--neg"), borderRadius: 4, borderSkipped: "start", maxBarThickness: 18 }] },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip }, scales: barScales } });
+
+      const banks = {};
+      b.accounts.forEach(a => (banks[a.bank_name || a.bank] ||= []).push(a));
+      const accCard = (a) => `<div class="card${a.hidden ? " muted" : ""}">
+        <strong>${esc(a.name)}</strong> ${badge(ACC_KIND[a.kind] || a.kind, a.kind === "bank" ? "" : "warn")}
+        <div class="${a.kind !== "bank" || a.balance < 0 ? "neg" : ""}" style="font-size:1.4rem;font-weight:700;margin:0.4rem 0 0.1rem">${money(a.balance)}</div>
+        <small class="muted">${a.last ? `after ${esc(a.last.description)} (${signed(a.last.amount)}) on ${a.last.date}` : a.balance_date ? `as at ${a.balance_date}` : "no balance yet"}</small>
+        <p class="muted" style="margin:0.5rem 0"><small>12 months: in <span class="pos">${money(a.in_12m || 0)}</span> · out <span class="neg">${money(a.out_12m || 0)}</span> · fees ${money(a.fees_12m || 0)} · ${a.count_12m || 0} transactions</small></p>
+        <div class="row"><select class="acc-kind" data-id="${a.id}">${Object.entries(ACC_KIND).map(([k, v]) => `<option value="${k}"${k === a.kind ? " selected" : ""}>${v}</option>`).join("")}</select>
+        <button class="secondary small acc-hide" data-id="${a.id}" data-h="${a.hidden ? "" : "1"}">${a.hidden ? "Count it" : "Leave out"}</button>
+        <button class="secondary small acc-txns" data-acc="${esc(a.account)}">Transactions</button></div></div>`;
+      $("#bank-accounts").innerHTML = Object.entries(banks).map(([bank, accs], i) => {
+        const counted = accs.filter(a => !a.hidden && a.balance != null);
+        const net = counted.reduce((t, a) => t + (a.kind === "bank" ? a.balance : -Math.abs(a.balance)), 0);
+        const latest = accs.map(a => a.last?.date).filter(Boolean).sort().pop();
+        return `<details class="section bank-group"${i === 0 ? " open" : ""}><summary><span>${esc(bank)} <small class="muted">${accs.length} account${accs.length === 1 ? "" : "s"}${latest ? ` · latest ${latest}` : ""}</small></span>
+          <span class="${net < 0 ? "neg" : "pos"}" style="font-weight:700">${money(net)}</span></summary>
+          <div class="grid">${accs.map(accCard).join("")}</div>
+          <div class="card table-wrap"><table><thead><tr><th>Date</th><th>What</th><th class="num">Amount</th><th class="num">Balance</th></tr></thead>
+          <tbody class="bank-recent" data-bank="${esc(bank)}"></tbody></table></div></details>`;
+      }).join("") || `<p class="muted">No bank statements read yet.</p>`;
+      $$(".acc-txns").forEach(el => el.addEventListener("click", () => {
+        $("#bank-acc").value = el.dataset.acc; renderBankRows();
+        $("#sec-bank-txns").open = true; $("#sec-bank-txns").scrollIntoView({ behavior: "smooth" });
+      }));
+      $$(".acc-kind").forEach(el => el.addEventListener("change", async () => {
+        try { await api.updateBankAccount(el.dataset.id, { kind: el.value }); loadBank(); } catch (e) { flash(e.message, "err"); }
+      }));
+      $$(".acc-hide").forEach(el => el.addEventListener("click", async () => {
+        try { await api.updateBankAccount(el.dataset.id, { hidden: !!el.dataset.h }); loadBank(); } catch (e) { flash(e.message, "err"); }
+      }));
+
+      $("#liabilities").innerHTML = b.liabilities.map(m => `<div class="card">
+        <strong>${esc(m.name)}</strong><br><small class="muted">${LKIND[m.kind] || esc(m.kind)}${m.rate != null ? ` · ${m.rate}% a year` : ""}${m.monthly ? ` · ${money(m.monthly)}/month` : ""}</small>
+        <div class="neg" style="font-size:1.4rem;font-weight:700;margin:0.4rem 0">${money(m.balance)}</div>
+        <div class="row"><button class="secondary small liab-upd" data-id="${m.id}">Update balance</button><button class="secondary small liab-del" data-id="${m.id}">Remove</button></div></div>`).join("")
+        || `<p class="muted">None added.</p>`;
+      $$(".liab-upd").forEach(el => el.addEventListener("click", async () => {
+        const m = b.liabilities.find(x => x.id == el.dataset.id);
+        const v = prompt(`How much is still owing on ${m.name}? (R)`, m.balance);
+        if (v === null || !v.trim()) return;
+        try { await api.updateLiability(m.id, { ...m, balance: v.trim() }); loadBank(); } catch (e) { flash(e.message, "err"); }
+      }));
+      $$(".liab-del").forEach(el => el.addEventListener("click", async () => {
+        if (!confirm("Remove this debt?")) return;
+        try { await api.deleteLiability(el.dataset.id); loadBank(); } catch (e) { flash(e.message, "err"); }
+      }));
+
+      bankRows = await api.bankTxns();
+      $("#cnt-bank").textContent = bankRows.length;
+      $("#bank-cat").innerHTML = `<option value="">All categories</option>` + [...new Set(bankRows.map(t => t.category))].sort().map(c => `<option>${esc(c)}</option>`).join("");
+      $("#bank-acc").innerHTML = `<option value="">All accounts</option>` + [...new Set(bankRows.map(t => t.account))].map(c => `<option>${esc(c)}</option>`).join("");
+      renderBankRows();
+      $$(".bank-recent").forEach(tb => {
+        const names = new Set(b.accounts.filter(a => (a.bank_name || a.bank) === tb.dataset.bank).map(a => a.account));
+        tb.innerHTML = bankRows.filter(t => names.has(t.account)).slice(0, 8).map(t => `<tr><td>${t.date}</td>
+          <td>${esc(t.description)} ${badge(t.category, t.category === "Bank fees" ? "warn" : "")}</td>
+          <td class="num">${signed(t.amount)}</td><td class="num">${t.balance != null ? money(t.balance) : ""}</td></tr>`).join("") || empty(4, "No transactions yet.");
+      });
+      const stmts = await api.bankStatements();
+      $("#cnt-bank-stmts").textContent = stmts.length;
+      $("#bank-stmts").innerHTML = stmts.map(x => `<tr><td>${esc((x.received_at || "").slice(0, 10))}</td>
+        <td>${esc(x.account || x.bank)}<br><small class="muted">${esc(x.filename)}</small></td>
+        <td>${x.status === "ok" ? badge("read", "ok") : badge(x.status, "warn")}${x.error ? `<br><small class="muted">${esc(x.error)}</small>` : ""}</td>
+        <td class="num">${x.rows}</td><td class="num">${x.closing_balance != null ? money(x.closing_balance) : ""}</td>
+        <td>${x.status === "ok" ? `<button class="secondary small bank-text" data-id="${x.id}">Text</button>` : ""}</td></tr>`).join("") || empty(6, "Nothing read yet.");
+      $$(".bank-text").forEach(el => el.addEventListener("click", () => showBankText(el.dataset.id).catch(e => flash(e.message, "err"))));
+    }
+    function renderBankRows() {
+      const q = ($("#bank-search").value || "").trim().toLowerCase(), cat = $("#bank-cat").value, acc = $("#bank-acc").value;
+      const rows = bankRows.filter(t => (!cat || t.category === cat) && (!acc || t.account === acc) &&
+        (!q || `${t.description} ${t.category} ${t.account} ${t.amount}`.toLowerCase().includes(q)));
+      $("#bank-rows").innerHTML = rows.slice(0, 1500).map(t => `<tr><td>${t.date}</td>
+        <td>${esc(t.description)} <button class="cat-edit" data-id="${t.id}" title="Change category">${badge(t.category, t.category === "Bank fees" ? "warn" : t.category.startsWith("Other") ? "muted" : "")}</button></td><td><small>${esc(t.account)}</small></td>
+        <td class="num">${signed(t.amount)}</td><td class="num">${t.fee ? `<span class="neg">${money(t.fee)}</span>` : ""}</td>
+        <td class="num">${t.balance != null ? money(t.balance) : ""}</td></tr>`).join("") || empty(6, "No bank transactions.");
+      $("#bank-search-note").textContent = q || cat || acc ? `${rows.length} match${rows.length === 1 ? "" : "es"}` : "";
+      if (q) $("#sec-bank-txns").open = true;
+    }
+    async function showBankText(id) {
+      const d = await api.bankStatementText(id);
+      const box = document.createElement("div");
+      box.className = "modal";
+      box.innerHTML = `<div class="modal-card" role="dialog" aria-label="${esc(d.name)}"><div class="modal-head"><strong>${esc(d.name)}</strong>
+        <button class="secondary small modal-x">Close</button></div><pre>${esc(d.text)}</pre></div>`;
+      document.body.appendChild(box);
+      box.addEventListener("click", (e) => { if (e.target === box || e.target.closest(".modal-x")) box.remove(); });
+    }
+    let catNames = null;
+    async function chooseCategory(id) {
+      catNames ||= (await api.bankCategories()).names;
+      const t = bankRows.find(x => x.id == id);
+      const box = document.createElement("div");
+      box.className = "modal";
+      box.innerHTML = `<div class="modal-card" role="dialog" aria-label="Choose a category"><div class="modal-head"><strong>${esc(t.description)}</strong>
+        <button class="secondary small modal-x">Close</button></div><p class="muted">${signed(t.amount)} on ${t.date}. C-Lab will remember this merchant and fix its other lines.</p>
+        <div class="chips">${catNames.map(n => `<button class="${n === t.category ? "" : "secondary "}small pick-cat">${esc(n)}</button>`).join("")}</div></div>`;
+      document.body.appendChild(box);
+      box.addEventListener("click", async (e) => {
+        if (e.target === box || e.target.closest(".modal-x")) return box.remove();
+        const b = e.target.closest(".pick-cat");
+        if (!b) return;
+        try {
+          const r = await api.setBankCategory(id, { category: b.textContent });
+          box.remove();
+          flash(`Now ${r.category}${r.rule ? `; remembered "${r.rule}"${r.also_changed ? `, ${r.also_changed} other line(s) updated` : ""}` : ""}.`);
+          loadBank();
+        } catch (err) { flash(err.message, "err"); }
+      });
+    }
+    $("#bank-rows").addEventListener("click", (e) => { const b = e.target.closest(".cat-edit"); if (b) chooseCategory(b.dataset.id).catch(err => flash(err.message, "err")); });
+    action($("#bank-tidy"), async () => {
+      const r = await api.bankCategorise();
+      flash(`Categories tidied: ${r.rules_and_keywords} changed by rules${r.left != null ? `, ${r.ai} named by AI, ${r.left} still Other` : " (AI not set up)"}.${r.to_download ? ` ${r.to_download} GoTyme statement(s) need reading again: press Read bank statements.` : ""}`);
+      loadBank();
+    });
+    let bankTimer;
+    $("#bank-search").addEventListener("input", () => { clearTimeout(bankTimer); bankTimer = setTimeout(renderBankRows, 150); });
+    $("#bank-cat").addEventListener("change", renderBankRows);
+    $("#bank-acc").addEventListener("change", renderBankRows);
+    action($("#bank-read"), async () => {
+      const r = await api.bankSync();
+      flash(`Found ${r.found} statement email(s), read ${r.read_now}, ${r.rows_now} lines. ${r.left ? r.left + " left, press again." : "All done."}`);
+      loadBank();
+    });
+    onSubmit($("#liab-form"), async (d, e) => {
+      await api.addLiability({ ...d, rate: d.rate || null, monthly: d.monthly || null });
+      e.target.reset();
+      loadBank();
+    });
+
+    // EasyEquities blog: dividends coming up (overview) and picks to watch (watchlist)
+    const MINE = { hold: ["you hold this", "ok"], watch: ["on your watchlist", ""] };
+    const divAmt = (d) => d.amount == null ? "" : `${d.currency === "ZAR" ? "R" : d.currency === "USD" ? "$" : d.currency + " "}${amount(d.amount)}${d.amount_zar != null ? ` <small class="muted">[R${amount(d.amount_zar)}]</small>` : ""}`;
+    const dayOr = (d) => d ? day(d) : "—";
+    const STATE = { open: ["still open", "ok"], paying: ["being paid", ""], paid: ["paid", "muted"] };
+    const SEASON_ORDER = ["Summer", "Autumn", "Winter", "Spring"];
+    const priceCell = (d) => d.price == null ? "—" : `${d.price_currency === "ZAR" ? "R" : d.price_currency === "USD" ? "$" : (d.price_currency || "") + " "}${amount(d.price)}`;
+    const yieldCell = (d) => `${d.this_pct != null ? (d.this_pct * 100).toFixed(2) + "%" : "—"}${d.yield_12m != null ? `<br><small class="muted">${(d.yield_12m * 100).toFixed(1)}% a year</small>` : ""}`;
+    function sortDivs(rows, how) {
+      const by = {
+        date: (a, b) => (a.ldt || "").localeCompare(b.ldt || ""),
+        yield: (a, b) => (b.this_pct ?? -1) - (a.this_pct ?? -1),
+        yield12: (a, b) => (b.yield_12m ?? -1) - (a.yield_12m ?? -1),
+        amount: (a, b) => (b.amount_zar ?? b.amount ?? 0) - (a.amount_zar ?? a.amount ?? 0),
+        season: (a, b) => SEASON_ORDER.indexOf(a.season) - SEASON_ORDER.indexOf(b.season) || (a.pay_date || "").localeCompare(b.pay_date || ""),
+      }[how] || (() => 0);
+      return [...rows].sort(by);
+    }
+    let blogData = null;
+    function blogRowsHtml(rows, how, emptyText) {
+      let lastSeason = "";
+      return rows.map(d => {
+        const head = how === "season" && d.season !== lastSeason ? `<tr class="group-row"><td colspan="7"><strong>${esc(d.season || "Unknown")}</strong></td></tr>` : "";
+        lastSeason = d.season;
+        return `${head}<tr class="${d.state === "paid" ? "dim" : ""}"><td>${esc(d.instrument)}<br><small class="muted">${esc(d.account)} account${d.ticker ? ` · ${esc(d.ticker)}` : ""}${d.mine ? " · " + MINE[d.mine][0] : ""}${d.pays_in?.length ? ` · pays ${d.pays_in.join(", ")}` : ""}</small></td>
+        <td class="num">${divAmt(d)}</td><td class="num">${priceCell(d)}</td><td class="num">${yieldCell(d)}</td>
+        <td>${dayOr(d.ldt)}</td><td>${dayOr(d.pay_date)}</td><td>${badge(...STATE[d.state])}</td></tr>`;
+      }).join("") || empty(7, emptyText);
+    }
+    function renderBlogRows() {
+      const how = $("#blog-sort").value, all = sortDivs(blogData?.upcoming || [], how);
+      const active = all.filter(d => d.state !== "paid"), paid = all.filter(d => d.state === "paid");
+      $("#blog-rows").innerHTML = blogRowsHtml(active.slice(0, 80), how,
+        paid.length ? "Nothing open or being paid right now; the latest ones are under Already paid." : "No dividends in the latest posts yet. The blog is checked every night.");
+      $("#blog-paid-wrap").hidden = !paid.length;
+      $("#cnt-blog-paid").textContent = paid.length;
+      $("#blog-paid-rows").innerHTML = blogRowsHtml(paid.slice(0, 80), how, "");
+    }
+    $("#blog-sort").addEventListener("change", renderBlogRows);
+    function renderBlog(b) {
+      $("#blog-wrap").hidden = !(b && (b.upcoming.length || b.posts.length));
+      if (!b) return;
+      const mine = b.upcoming.filter(d => d.mine && d.state !== "paid");
+      $("#my-divs-wrap").hidden = !mine.length;
+      $("#my-divs").innerHTML = mine.map(d => `<div class="card stat"><div class="value">${d.estimate != null ? money(d.estimate) : divAmt(d)}</div>
+        <div class="label"><strong>${esc(d.instrument)}</strong> ${badge(...MINE[d.mine])}<br>${d.estimate != null ? `${units(d.units)} × ${divAmt(d)} · ` : ""}${d.state === "open" ? `buy by ${dayOr(d.ldt)}` : d.state === "paying" ? `paid ${dayOr(d.pay_date)}` : `paid on ${dayOr(d.pay_date)}`}</div></div>`).join("");
+      const open = b.upcoming.filter(d => d.state === "open").length;
+      $("#blog-note").textContent = b.upcoming.length ? (open ? `${open} still open.` : "Nothing open right now; these are the latest declared.") : "";
+      blogData = b;
+      renderBlogRows();
+      $("#cnt-blog").textContent = b.posts.length;
+      $("#blog-posts").innerHTML = b.posts.map(p => `<a class="card" href="${esc(p.url)}" target="_blank" rel="noopener">
+        <strong>${esc(p.title)}</strong><br><small class="muted">${dayOr(p.published)}${p.items ? ` · ${p.items} dividends` : ""}</small>
+        ${p.summary ? `<ul class="muted blog-points">${p.summary.split("\n").slice(0, 5).map(l => `<li>${esc(l.length > 200 ? l.slice(0, 199) + "…" : l)}</li>`).join("")}</ul>` : ""}</a>`).join("");
+    }
+    async function loadPicks() {
+      const b = await api.blog();
+      const picks = sortDivs(b.upcoming.filter(d => d.can_buy), "yield");
+      picksOpen = picks.length;
+      if (watchRows) summaryWatch(watchRows, picksOpen);
+      $("#picks-wrap").hidden = false;
+      $("#cnt-picks").textContent = picks.length;
+      $("#picks").innerHTML = picks.map((d, i) => `<tr><td>${esc(d.instrument)}<br><small class="muted">${esc(d.account)} account</small></td>
+        <td class="num">${divAmt(d)}</td><td class="num">${priceCell(d)}</td><td class="num">${yieldCell(d)}</td><td>${dayOr(d.ldt)}</td><td>${dayOr(d.pay_date)}</td>
+        <td>${d.mine ? badge(...MINE[d.mine]) : `<button class="small pick" data-i="${i}">Watch</button>`}</td></tr>`).join("")
+        || empty(7, b.upcoming.length ? "Every dividend in the latest update is past its last day to trade. New ones arrive with the next update (checked nightly)." : "No dividends read from the blog yet. Tap \"Check the blog now\".");
+      $$("#picks .pick").forEach(el => el.addEventListener("click", async () => {
+        const d = picks[el.dataset.i];
+        el.disabled = true;
+        try { const w = await api.blogWatch({ instrument: d.instrument, account: d.account }); flash(`Watching ${w.symbol}.`); loadWatch(); }
+        catch (e) { flash(e.message, "err"); el.disabled = false; }
+      }));
+    }
+    action($("#blog-refresh"), async () => {
+      const r = await api.blogRefresh();
+      flash(`Blog checked: ${r.read} new post(s).`);
+      loadPicks();
+    });
+
+    // Summary card under each tab's charts: the totals in words.
+    function summary(id, items, note = "") {
+      const shown = items.filter(Boolean);
+      const topic = id.replace("#sum-", "");
+      const askBtn = TOPIC_NAME[topic] ? `<button type="button" class="secondary small ask-about" data-topic="${topic}">✨ Ask AI about this</button>` : "";
+      $(id).innerHTML = shown.length ? `<div class="card summary"><div class="ai-head"><h3>Summary</h3>${askBtn}</div><dl class="sum-list">${shown.map(([k, v, sub]) =>
+        `<div><dt>${k}</dt><dd>${v}${sub ? `<small class="muted">${sub}</small>` : ""}</dd></div>`).join("")}</dl>${note ? `<p class="sum-note">${note}</p>` : ""}</div>` : "";
+    }
+    const pctOf = (a, b) => b ? `${(a / b * 100).toFixed(1)}%` : "—";
+    const top = (arr, key) => arr.length ? arr.reduce((a, b) => (b[key] > a[key] ? b : a)) : null;
+    const bottom = (arr, key) => arr.length ? arr.reduce((a, b) => (b[key] < a[key] ? b : a)) : null;
+
+    function summaryOverview(s) {
+      const alloc = Object.entries(s.allocation), total = alloc.reduce((a, [, v]) => a + v, 0);
+      const [bigK, bigV] = alloc[0] || [];
+      const inc = s.income ? s.income.dividend + s.income.interest : null, cost = s.income ? s.income.fee + s.income.tax : null;
+      const shares = s.holdings.filter(h => h.asset_class !== "easyproperties").length;
+      const b = s.banking || {};
+      summary("#sum-overview", [
+        ["Real net worth", `<strong>${money(s.net_worth)}</strong>`, "investments + property + bank − debt"],
+        ["Portfolio worth", money(s.value), `${shares} holdings${s.cash == null ? "" : s.cash < 0 ? ` · ${money(-s.cash)} owed to EasyEquities` : ` · ${money(s.cash)} cash`}`],
+        ["Money put in", money(s.invested), s.since ? `since ${s.since}` : ""],
+        ["Gain", signed(s.gain), pct(s.return_pct)],
+        inc != null && ["Dividends + interest", money(inc), `dividends ${money(s.income.dividend)} · interest ${money(s.income.interest)}`],
+        cost != null && ["Fees + tax", `<span class="neg">${money(cost)}</span>`, `fees ${money(s.income.fee)} · tax ${money(s.income.tax)}`],
+        ["Property equity", money(s.property_equity), s.easyproperties_value ? `EasyProperties ${money(s.easyproperties_value)}` : ""],
+        (b.accounts || b.debt) && ["Bank", money(b.cash), `debt ${money(b.debt)} · bank fees ${money(b.fees_12m)} (12m)`],
+        bigK && ["Biggest slice", CLASS[bigK] || esc(bigK), `${money(bigV)} · ${pctOf(bigV, total)}`],
+      ], [
+        `You've put in ${money(s.invested)} and it's worth ${money(s.value)}, a ${s.gain < 0 ? "loss" : "gain"} of ${money(Math.abs(s.gain))} (${pct(s.return_pct)}).`,
+        inc != null ? (cost > inc ? `Fees and tax (${money(cost)}) cost more than dividends and interest paid you (${money(inc)}).`
+          : `Fees and tax took ${money(cost)} of the ${money(inc)} your dividends and interest paid.`) : "",
+        b.debt ? `Debts of ${money(b.debt)} come off your net worth.` : "",
+      ].filter(Boolean).join(" "));
+    }
+
+    function summaryHoldings(s) {
+      const rows = s.holdings.filter(h => h.asset_class !== "easyproperties" && h.value > 0);
+      if (!rows.length) return summary("#sum-holdings", []);
+      const value = rows.reduce((a, h) => a + h.value, 0), cost = rows.reduce((a, h) => a + (h.cost || 0), 0);
+      const gain = rows.reduce((a, h) => a + (h.gain || 0), 0), divs = rows.reduce((a, h) => a + (h.dividends || 0), 0);
+      const big = top(rows, "value"), priced = rows.filter(h => h.gain_pct != null), best = top(priced, "gain_pct"), worst = bottom(priced, "gain_pct");
+      const byClass = {};
+      rows.forEach(h => byClass[h.asset_class] = (byClass[h.asset_class] || 0) + h.value);
+      const accounts = new Set(rows.map(h => h.account).filter(Boolean));
+      summary("#sum-holdings", [
+        ["Holdings", rows.length, accounts.size ? `across ${accounts.size} account(s)` : ""],
+        ["Worth", `<strong>${money(value)}</strong>`, `cost ${money(cost)}`],
+        ["Gain", signed(gain), pctOf(gain, cost)],
+        ["Dividends received", money(divs)],
+        ["Biggest", esc(big.name || big.symbol), `${money(big.value)} · ${pctOf(big.value, value)} of holdings`],
+        best && ["Best", esc(best.name || best.symbol), pct(best.gain_pct)],
+        worst && worst !== best && ["Worst", esc(worst.name || worst.symbol), pct(worst.gain_pct)],
+        ["Mix", Object.entries(byClass).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${CLASS[k] || esc(k)} ${pctOf(v, value)}`).join(" · ")],
+      ], `Your top holding is ${pctOf(big.value, value)} of what you hold${big.value / value > 0.25 ? ", a big bet on one name" : ""}.`);
+    }
+
+    function summaryTransactions(t) {
+      const acc = t.by_account || [], income = acc.reduce((a, x) => a + x.income, 0), costs = acc.reduce((a, x) => a + x.costs, 0);
+      const types = (t.cost_types || []).filter(x => x.amount > 0), bigCost = top(types, "amount"), bestAcc = top(acc, "income");
+      const dates = (t.rows || []).map(r => r.date).filter(Boolean).sort();
+      summary("#sum-transactions", [
+        ["Statement lines", (t.rows || []).length, dates.length ? `${dates[0]} to ${dates[dates.length - 1]}` : ""],
+        ["Dividends + interest", `<span class="pos">${money(income)}</span>`],
+        ["Fees + tax", `<span class="neg">${money(costs)}</span>`, income ? `${pctOf(costs, income)} of income` : ""],
+        ["Net from income", signed(income - costs)],
+        bigCost && ["Biggest cost", esc(bigCost.type), money(bigCost.amount)],
+        bestAcc && bestAcc.income > 0 && ["Top earning account", esc(bestAcc.account), money(bestAcc.income)],
+        t.reader && ["Statements read", `${t.reader.done ?? ""}${t.reader.total ? ` of ${t.reader.total}` : ""}`],
+      ], income ? `For every R100 of dividends and interest, R${(costs / income * 100).toFixed(2)} went to fees and tax.` : "");
+    }
+
+    function summaryBanking(b) {
+      const last12 = b.months.slice(-12), out = last12.reduce((a, m) => a + m.out, 0);
+      const offStatements = last12.reduce((a, m) => a + (m.unrecorded_in || 0), 0);
+      const inn = last12.reduce((a, m) => a + m.in, 0) + offStatements;
+      const incomeCats = Object.entries(b.income_categories || {});
+      const regular = incomeCats.filter(([k]) => /\(regular\)$|^Salary|^Grants/.test(k)).reduce((a, [, v]) => a + v, 0);
+      const onceOff = ((b.income_categories || {})["Once-off payments"] || 0) + ((b.income_categories || {})["From people (no name)"] || 0);
+      const cats = Object.entries(b.categories), [bigCat, bigAmt] = cats[0] || [];
+      summary("#sum-banking", [
+        ["In the bank", money(b.cash), `${b.accounts.filter(a => a.kind === "bank" && !a.hidden).length} account(s)`],
+        ["Debt", `<span class="neg">${money(b.debt)}</span>`, `${b.accounts.filter(a => a.kind !== "bank").length} card/loan · ${b.liabilities.length} added`],
+        ["Bank less debt", signed(b.cash - b.debt)],
+        last12.length && ["Money in", `<span class="pos">${money(inn)}</span>`, `${last12.length} month(s); moves between your own accounts left out`],
+        regular > 0 && ["Regular income", `<span class="pos">${money(regular)}</span>`, "salary, grants and anyone who pays you most months"],
+        onceOff > 0 && ["From people", `<span class="pos">${money(onceOff)}</span>`, `vs ${money(b.categories["Sent to people"] || 0)} sent to people`],
+        (b.income_categories || {})["Unknown source"] > 0 && ["Unknown source", `<span class="pos">${money(b.income_categories["Unknown source"])}</span>`, "your balance rose with no statement line saying why"],
+        last12.length && ["Money out", `<span class="neg">${money(out)}</span>`, `about ${money(out / last12.length)} a month`],
+        last12.length && ["Kept", signed(inn - out), inn ? `${pctOf(inn - out, inn)} of what came in` : ""],
+        ["Bank fees", `<span class="neg">${money(b.fees_12m)}</span>`, "last 12 months"],
+        bigCat && ["Biggest spend", esc(bigCat), `${money(bigAmt)} · ${pctOf(bigAmt, out)} of spending`],
+      ], last12.length ? `Over the last ${last12.length} month(s) you ${inn >= out ? "kept" : "spent"} ${money(Math.abs(inn - out))} ${inn >= out ? "of what came in" : "more than came in"}, and paid ${money(b.fees_12m)} in bank fees.` : "");
+    }
+
+    function summaryProperty(s, own) {
+      const ep = s.holdings.filter(h => h.asset_class === "easyproperties");
+      const epV = ep.reduce((a, h) => a + h.value, 0), epC = ep.reduce((a, h) => a + h.cost, 0), rent = ep.reduce((a, h) => a + (h.rental_income || 0), 0);
+      const yields = ep.filter(h => h.rental_yield != null), avgY = yields.length ? yields.reduce((a, h) => a + h.rental_yield * h.value, 0) / yields.reduce((a, h) => a + h.value, 0) : null;
+      const val = own.reduce((a, p) => a + (p.valuation || 0), 0), bond = own.reduce((a, p) => a + (p.bond_balance || 0), 0);
+      const flow = own.reduce((a, p) => a + (p.monthly_cashflow || 0), 0);
+      summary("#sum-property", [
+        ep.length && ["EasyProperties", money(epV), `${ep.length} properties · cost ${money(epC)}`],
+        ep.length && ["EasyProperties gain", signed(epV - epC), pctOf(epV - epC, epC)],
+        ep.length && ["Rental income", money(rent), avgY != null ? `average yield ${(avgY * 100).toFixed(2)}%` : ""],
+        own.length && ["Own property", money(val), `${own.length} propert${own.length === 1 ? "y" : "ies"}`],
+        own.length && ["Bond owing", `<span class="neg">${money(bond)}</span>`],
+        own.length && ["Equity", money(val - bond), `cash flow ${money(flow)} a month`],
+        ["All property equity", `<strong>${money(s.property_equity)}</strong>`],
+      ], !(ep.length || own.length) ? "Add a property or connect EasyEquities to see this."
+        : s.net_worth > 0 ? `Property is ${pctOf(s.property_equity, s.net_worth)} of your net worth.` : "");
+    }
+
+    function summaryWatch(rows, picks) {
+      if (!rows.length && !picks) return summary("#sum-watchlist", []);
+      const priced = rows.filter(w => w.change_1y != null), best = top(priced, "change_1y"), worst = bottom(priced, "change_1y");
+      const yields = rows.filter(w => w.dividend_yield != null), hy = top(yields, "dividend_yield");
+      summary("#sum-watchlist", [
+        ["Watching", rows.length, `${rows.filter(w => w.alert_below != null || w.alert_above != null).length} with alerts`],
+        best && ["Best year", esc(best.symbol), pct(best.change_1y)],
+        worst && worst !== best && ["Worst year", esc(worst.symbol), pct(worst.change_1y)],
+        hy && ["Highest yield", esc(hy.symbol), `${(hy.dividend_yield * 100).toFixed(1)}%`],
+        picks != null && ["Dividend picks open", picks, "from EasyEquities' blog"],
+      ]);
+    }
+
+    function summaryMarkets(markets) {
+      const m = markets.filter(x => x.change_1d != null), up = m.filter(x => x.change_1d > 0).length;
+      const y = markets.filter(x => x.change_1y != null), best = top(y, "change_1y"), worst = bottom(y, "change_1y");
+      summary("#sum-markets", [
+        ["Today", `${up} up · ${m.length - up} down`],
+        best && ["Best year", esc(best.label), pct(best.change_1y)],
+        worst && ["Worst year", esc(worst.label), pct(worst.change_1y)],
+      ]);
+    }
+
+    // Money picture: banking next to investments and property.
+    function renderMoney(mp, s) {
+      const rows = mp.months.filter(r => r.investments || r.bank || r.debt || r.money_in || r.money_out);
+      $("#money-wrap").hidden = !rows.length && !(s.banking?.accounts);
+      if (!rows.length) return;
+      const labels = rows.map(r => monthLabel(r.month));
+      const bar = (label, data, colour) => ({ type: "bar", label, data, backgroundColor: colour, stack: "nw", borderRadius: 2, maxBarThickness: 22 });
+      chart("#nw-chart", {
+        data: { labels, datasets: [
+          bar("Investments", rows.map(r => r.investments), css("--series-1")),
+          bar("Bank", rows.map(r => r.bank), css("--series-2")),
+          bar("Own property", rows.map(r => r.property), css("--cat-3")),
+          bar("Debt", rows.map(r => -r.debt), css("--neg")),
+          { type: "line", label: "Net worth", data: rows.map(r => r.net_worth), borderColor: css("--text"), backgroundColor: css("--text"),
+            borderWidth: 2, pointRadius: rows.length < 20 ? 3 : 0, tension: 0.25 },
+        ] },
+        options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+          plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { label: (c) => ` ${c.dataset.label}: ${money(Math.abs(c.parsed.y))}` } } },
+          scales: { x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { stacked: true, ticks: { callback: randTick, maxTicksLimit: 5 } } } },
+      });
+      chart("#bank-io-chart", {
+        data: { labels, datasets: [
+          { type: "bar", label: "In", data: rows.map(r => r.money_in), backgroundColor: css("--pos"), stack: "io", borderRadius: 3, maxBarThickness: 18 },
+          { type: "bar", label: "Out", data: rows.map(r => -r.money_out), backgroundColor: css("--neg"), stack: "io", borderRadius: 3, maxBarThickness: 18 },
+          { type: "line", label: "Moved into investments", data: rows.map(r => r.invested), borderColor: css("--series-1"), backgroundColor: css("--series-1"),
+            borderWidth: 2, pointRadius: 2, tension: 0.2 },
+        ] },
+        options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+          plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { label: (c) => ` ${c.dataset.label}: ${money(Math.abs(c.parsed.y))}` } } },
+          scales: { x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { stacked: true, ticks: { callback: randTick, maxTicksLimit: 5 } } } },
+      });
+      const u = mp.income_12m;
+      const parts = [["Spent", u.spent], ["Invested", u.invested], ["Bank fees", u.fees], ["Kept in the bank", u.kept]]
+        .filter(([, v]) => v > 0).map(([label, value]) => ({ label, value }));
+      $("#income-use-chart").closest(".card").hidden = !parts.length;
+      if (parts.length) pie("#income-use-chart", "#income-use-legend", parts);
+      const inv = s.value, prop = s.property_equity - (s.easyproperties_value || 0), bank = s.banking?.cash || 0, debt = s.banking?.debt || 0;
+      hbar("#nw-parts-chart", ["Investments", "Own property", "Bank", "Debt"], [inv, prop, bank, -debt],
+        [css("--series-1"), css("--cat-3"), css("--series-2"), css("--neg")]);
+      const saved = u.income ? (u.invested + Math.max(0, u.kept)) / u.income : null;
+      $("#money-note").textContent = u.income
+        ? `Last 12 months: ${money(u.income)} came in; you spent ${money(u.spent)}, paid ${money(u.fees)} in bank fees and moved ${money(u.invested)} into investments${saved != null ? `, so about ${(saved * 100).toFixed(0)}% of your income was saved or invested` : ""}.`
+        : "Banking next to your investments and property, month by month.";
+    }
+
+    // AI suggestions (Cohere) under each tab, and Ask AI (Groq).
+    const IMPACT = { high: ["big win", "ok"], medium: ["worth doing", ""], low: ["small", "muted"] };
+    let aiStatus = null;
+    async function loadSuggestions(section, refresh = false) {
+      const box = $(`#ai-${section}`);
+      if (!box) return;
+      aiStatus ||= await api.aiStatus().catch(() => ({ suggestions: false, chat: false }));
+      if (!aiStatus.suggestions) { box.innerHTML = ""; return; }
+      if (refresh) box.innerHTML = `<div class="card ai-card"><h3>Suggestions</h3><p class="muted">Thinking about your numbers…</p></div>`;
+      let r;
+      try { r = await api.aiSuggestions(section, refresh); }
+      catch (e) { box.innerHTML = `<div class="card ai-card"><h3>Suggestions</h3><p class="muted">${esc(e.message)}</p></div>`; return; }
+      box.innerHTML = `<div class="card ai-card"><div class="ai-head"><h3><span class="cl-icon" aria-hidden="true">i</span> Suggestions</h3>
+        ${(() => { const wait = r.next_refresh_at && new Date(r.next_refresh_at + "Z") > new Date();
+          return `<button class="secondary small ai-go"${wait ? " disabled" : ""}>${!r.items.length ? "Suggest improvements" : wait ? `Refresh after ${new Date(r.next_refresh_at + "Z").toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}` : "Refresh"}</button>`; })()}</div>
+        ${r.items.length ? `<ol class="ai-list">${r.items.map(i => `<li><strong>${esc(i.title)}</strong> ${badge(...(IMPACT[i.impact] || IMPACT.medium))}
+          ${i.value ? `<small class="muted"> · about ${money(i.value)} a year</small>` : ""}<br><span>${esc(i.detail)}</span></li>`).join("")}</ol>
+          <p class="muted"><small>From Cohere, ${day(r.created_at)} (made nightly, saved so it doesn't use your quota). Based on your totals; not financial advice.</small></p>`
+        : `<p class="muted">Get ideas on this page's numbers, checked against your banking and investments together.</p>`}</div>`;
+      $(".ai-go", box).addEventListener("click", () => loadSuggestions(section, true));
+    }
+
+    // Small Markdown renderer for AI replies: headings, tables, lists, bold/italic, code, links. Input is escaped first.
+    function md(src) {
+      const inline = (t) => esc(t)
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      const lines = String(src || "").replace(/\r/g, "").split("\n");
+      let html = "", i = 0;
+      const isRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+      while (i < lines.length) {
+        const l = lines[i];
+        if (/^\s*```/.test(l)) {
+          let code = []; i++;
+          while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
+          html += `<pre><code>${esc(code.join("\n"))}</code></pre>`; i++; continue;
+        }
+        if (isRow(l) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+          const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+          const head = cells(l); i += 2;
+          let body = "";
+          while (i < lines.length && isRow(lines[i])) {
+            body += `<tr>${cells(lines[i]).map(c => `<td class="${/^[-−R$£€\d][\d\s.,%R$£€−-]*$/.test(c) ? "num" : ""}">${inline(c)}</td>`).join("")}</tr>`; i++;
+          }
+          html += `<div class="table-wrap md-table"><table><thead><tr>${head.map(h => `<th>${inline(h)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
+          continue;
+        }
+        const h = l.match(/^\s*(#{1,4})\s+(.*)$/);
+        if (h) { html += `<h${Math.min(h[1].length + 2, 6)}>${inline(h[2])}</h${Math.min(h[1].length + 2, 6)}>`; i++; continue; }
+        if (/^\s*([-*•]|\d+[.)])\s+/.test(l)) {
+          const ordered = /^\s*\d+[.)]/.test(l), tag = ordered ? "ol" : "ul";
+          let items = "";
+          while (i < lines.length && /^\s*([-*•]|\d+[.)])\s+/.test(lines[i])) {
+            items += `<li>${inline(lines[i].replace(/^\s*([-*•]|\d+[.)])\s+/, ""))}</li>`; i++;
+          }
+          html += `<${tag}>${items}</${tag}>`; continue;
+        }
+        if (/^\s*(---|\*\*\*)\s*$/.test(l)) { html += "<hr>"; i++; continue; }
+        if (!l.trim()) { i++; continue; }
+        let para = [];
+        while (i < lines.length && lines[i].trim() && !isRow(lines[i]) && !/^\s*(#{1,4}\s|[-*•]\s|\d+[.)]\s|```)/.test(lines[i])) para.push(lines[i++]);
+        html += `<p>${para.map(inline).join("<br>")}</p>`;
+      }
+      return html;
+    }
+    // Ask AI: a full-screen chat app with saved conversations (on the server) and tap-to-ask follow-ups.
+    const TOPIC_NAME = { overview: "Portfolio", banking: "Banking", holdings: "Holdings", transactions: "Transactions",
+      property: "Property", watchlist: "Watchlist" };
+    const STARTERS = [["📊", "How am I doing overall?"], ["🛒", "Where can I cut spending?"], ["⚖️", "Should I pay off debt or invest more?"],
+      ["💸", "How much do fees cost me a year?"], ["🌱", "Which dividends coming up look good?"], ["🏦", "How much should I keep in the bank?"]];
+    let chat = { id: null, title: "", topic: "", messages: [] }, pendingAsk = null, chatBusy = false;
+    const sideOpen = (open) => { $("#ai-side").classList.toggle("open", open); $("#ai-scrim").classList.toggle("open", open); };
+    async function loadChatList() {
+      const list = await api.aiChats().catch(() => []);
+      $("#ai-chats").innerHTML = list.map(c => `<div class="ai-chat-item${c.id === chat.id ? " active" : ""}" data-id="${c.id}">
+        <button type="button" class="ai-chat-open"><span>${esc(c.title)}</span><small>${TOPIC_NAME[c.topic] ? TOPIC_NAME[c.topic] + " · " : ""}${day(c.updated_at)}</small></button>
+        <button type="button" class="ai-chat-del" aria-label="Delete chat">×</button></div>`).join("")
+        || `<p class="muted" style="padding:0 0.8rem"><small>Your chats appear here.</small></p>`;
+    }
+    $("#ai-chats").addEventListener("click", async (e) => {
+      const item = e.target.closest(".ai-chat-item");
+      if (!item) return;
+      if (e.target.closest(".ai-chat-del")) {
+        if (!confirm("Delete this chat?")) return;
+        await api.aiDeleteChat(item.dataset.id).catch(err => flash(err.message, "err"));
+        if (String(chat.id) === item.dataset.id) newChat();
+        return loadChatList();
+      }
+      try { chat = await api.aiChat(item.dataset.id); renderChat(); loadChatList(); sideOpen(false); } catch (err) { flash(err.message, "err"); }
+    });
+    function newChat(topic = "") { chat = { id: null, title: "", topic, messages: [] }; renderChat(); loadChatList(); sideOpen(false); }
+    $("#ai-new").addEventListener("click", () => newChat());
+    $("#ai-side-toggle").addEventListener("click", () => sideOpen(!$("#ai-side").classList.contains("open")));
+    $("#ai-scrim").addEventListener("click", () => sideOpen(false));
+
+    function welcome() {
+      const s = lastSummary;
+      const pill = (label, v) => v == null ? "" : `<span class="ai-pill"><small>${label}</small><b>${v}</b></span>`;
+      return `<div class="ai-welcome"><h2>${chat.topic ? `Ask about your ${TOPIC_NAME[chat.topic] || "money"}` : "Ask about your money"}</h2>
+        <p class="muted">The AI sees your latest totals from C-Lab: investments, property, bank, debt, fees and dividends.</p>
+        ${s ? `<div class="ai-pills">${pill("Net worth", money(s.net_worth))}${pill("Investments", money(s.value))}${s.banking ? pill("Bank", money(s.banking.cash)) + pill("Debt", money(s.banking.debt)) : ""}</div>` : ""}
+        <div class="ai-starters">${STARTERS.map(([icon, q]) => `<button type="button" class="ai-starter"><span>${icon}</span>${esc(q)}</button>`).join("")}</div></div>`;
+    }
+    function renderChat(thinking = false) {
+      $("#ai-title").textContent = chat.title || "New chat";
+      $("#ai-topic").textContent = TOPIC_NAME[chat.topic] ? ` · about ${TOPIC_NAME[chat.topic]}` : "";
+      const msgs = chat.messages.map((m, i) => m.role === "user"
+        ? `<div class="msg user">${esc(m.content)}</div>`
+        : `<div class="msg assistant"><div class="msg-body">${md(m.content)}</div><div class="msg-tools">
+            <button type="button" class="ai-copy" data-i="${i}">Copy</button></div></div>`).join("");
+      $("#chat-log").innerHTML = (chat.messages.length ? msgs : welcome())
+        + (thinking ? `<div class="msg assistant typing"><span></span><span></span><span></span></div>` : "");
+      const last = [...chat.messages].reverse().find(m => m.role === "assistant");
+      const ups = !thinking && last?.followups?.length ? last.followups : [];
+      $("#chat-chips").innerHTML = ups.map(q => `<button type="button" class="secondary small chip">${esc(q)}</button>`).join("");
+      $("#chat-log").scrollTop = $("#chat-log").scrollHeight;
+    }
+    $("#chat-log").addEventListener("click", (e) => {
+      const st = e.target.closest(".ai-starter");
+      if (st) return ask(st.textContent.replace(/^\S+\s*/, "").trim() || st.textContent.trim());
+      const cp = e.target.closest(".ai-copy");
+      if (cp) { navigator.clipboard?.writeText(chat.messages[cp.dataset.i].content).then(() => flash("Copied.")).catch(() => {}); }
+    });
+    $("#chat-chips").addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (c) ask(c.textContent); });
+    async function ask(q) {
+      q = (q || "").trim();
+      if (!q || chatBusy) return;
+      chatBusy = true;
+      chat.messages.push({ role: "user", content: q });
+      if (!chat.title) chat.title = q.slice(0, 80);
+      renderChat(true);
+      try {
+        const r = await api.aiConverse({ message: q, chat_id: chat.id, topic: chat.topic });
+        chat.id = r.chat_id; chat.title = r.title;
+        chat.messages.push({ role: "assistant", content: r.reply, followups: r.followups });
+        loadChatList();
+      } catch (e) { chat.messages.push({ role: "assistant", content: `Couldn't answer: ${e.message}` }); }
+      chatBusy = false;
+      renderChat();
+    }
+    let lastSummary = null;
+    async function loadChat() {
+      aiStatus ||= await api.aiStatus().catch(() => ({ suggestions: false, chat: false }));
+      if (!lastSummary) api.investSummary().then(s => { lastSummary = s; if (!chat.messages.length) renderChat(); }).catch(() => {});
+      const form = $("#chat-form");
+      form.q.disabled = !aiStatus.chat;
+      if (!aiStatus.chat) { $("#chat-log").innerHTML = `<p class="muted" style="padding:1rem">Ask AI needs a Groq key (GitHub secret GROQ_API_KEYS).</p>`; return; }
+      loadChatList();
+      if (pendingAsk) { const p = pendingAsk; pendingAsk = null; newChat(p.topic); if (p.prompt) ask(p.prompt); }
+      else renderChat();
+      setTimeout(() => form.q.focus(), 50);
+    }
+    const composer = $("#chat-form").q;
+    composer.addEventListener("input", () => { composer.style.height = "auto"; composer.style.height = Math.min(composer.scrollHeight, 160) + "px"; });
+    composer.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#chat-form").requestSubmit(); } });
+    $("#chat-form").addEventListener("submit", (e) => { e.preventDefault(); const q = composer.value; composer.value = ""; composer.style.height = "auto"; ask(q); });
+    // "Ask AI about this" from any tab
+    function askAbout(topic, prompt = "") { pendingAsk = { topic, prompt }; location.hash = "#ai"; }
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest(".ask-about");
+      if (b) askAbout(b.dataset.topic, `Explain my ${TOPIC_NAME[b.dataset.topic].toLowerCase()} numbers and what I should do about them.`);
+    });
+
+    // Company deals: buyouts, payouts, unbundlings, property mergers, each with "does buying now make money?"
+    const DEAL_TONE = { ok: ["can make money", "ok"], warn: ["loses money", "warn"], info: ["depends", ""] };
+    let dealsTimer = null, dealsPolls = 0;
+    // Paint whatever we have now; while a worker is reading the articles the card re-paints every few seconds with more.
+    function paintDeals(d) {
+      const box = $("#deals-markets"), job = d.job || {};
+      const opened = new Set(Array.from(box.querySelectorAll("details[open]")).map(x => x.dataset.k));
+      const price = (x) => x.price == null ? "no price"
+        : x.price_source === "article" ? `article quoted ${money(x.price)}` : `trades at ${money(x.price)}`;
+      const rows = d.deals.map(x => `<li class="deal">
+        <div class="row" style="justify-content:space-between;gap:0.5rem;flex-wrap:wrap">
+          <strong>${esc(x.company)}</strong>
+          <span>${x.reading ? badge("reading article…", "warn") + " " : ""}${badge(x.kind_label)}${x.property ? " " + badge("Property") : ""} ${badge(...DEAL_TONE[x.tone])}</span></div>
+        <small class="muted">${x.symbol ? esc(x.symbol) + " · " : ""}${price(x)}${x.amount ? ` · deal pays ${money(x.amount)} a share` : ""}${x.ldt ? ` · last day to trade ${day(x.ldt)}` : ""}${x.deadline ? ` · due by ${day(x.deadline)}` : ""}${x.since_news != null ? ` · ${x.since_news >= 0 ? "+" : ""}${(x.since_news * 100).toFixed(1)}% since the news` : ""}</small>
+        ${x.detail && x.detail.length ? `<details class="deal-why" data-k="${esc(x.link)}"${opened.has(x.link) ? " open" : ""}><summary style="cursor:pointer;margin:0.3rem 0">${esc(x.verdict)} <span class="muted">Why?</span></summary>
+          <ol style="margin:0.3rem 0 0.4rem 1.1rem;padding:0">${x.detail.map(s => `<li style="margin:0.15rem 0">${esc(s)}</li>`).join("")}</ol>
+          ${x.amount_link ? `<small class="muted">Payout amount from <a href="${esc(x.amount_link)}" target="_blank" rel="noopener">this article</a>.</small>` : ""}</details>`
+          : `<p style="margin:0.3rem 0">${esc(x.verdict)}</p>`}
+        ${x.read === "article" && x.evidence ? `<small class="muted">The article says: “${esc(x.evidence)}”</small><br>` : ""}
+        <small><a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.title)}</a> · ${esc(x.source)}${x.date ? ` · ${x.date}` : ""}</small></li>`).join("");
+      box.innerHTML = `<div class="card"><div class="ai-head"><h3>Company deals: worth buying for?</h3>
+        <button class="secondary small deals-refresh"${job.active ? " disabled" : ""}>${job.active ? `Reading articles${job.total ? ` ${job.done}/${job.total}` : "…"}` : "Refresh"}</button></div>
+        <div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> Buyouts, special payouts, unbundlings and property mergers from EasyEquities' blog and the news, checked against today's price after fees and 20% dividend tax. Deals can fail; this isn't advice.</p></div>
+        <ul class="plain">${rows || `<li class="muted">No company deals in the news right now.${d.sources.news ? "" : " Add SERPAPI_KEYS for news."}</li>`}</ul>
+        <small class="muted">Updated ${day(d.built_at)} ${d.built_at.slice(11, 16)} UTC${job.active ? " · reading the articles in the background; this fills in as each one is read" : ""}${job.status === "failed" ? ` · last update failed: ${esc(job.message)}` : ""}</small></div>`;
+      $(".deals-refresh", box).addEventListener("click", () => loadDeals(true));
+    }
+    function pollDeals() {
+      clearTimeout(dealsTimer);
+      if (dealsPolls++ > 120) return;  // about ten minutes
+      dealsTimer = setTimeout(async () => {
+        if (!$("#deals-markets").offsetParent) return;  // left the page; coming back reloads it
+        try {
+          const d = await api.deals();
+          paintDeals(d);
+          if (d.job && d.job.active) return pollDeals();
+          flash(d.job && d.job.status === "failed" ? d.job.message : "Company deals updated.", d.job && d.job.status === "failed" ? "err" : "ok");
+        } catch (e) { pollDeals(); }
+      }, 5000);
+    }
+    async function loadDeals(refresh = false) {
+      const box = $("#deals-markets");
+      let d;
+      try { d = refresh ? await api.refreshDeals() : await api.deals(); } catch (e) {
+        if (refresh) flash(e.message, "err"); else box.innerHTML = "";
+        return;
+      }
+      paintDeals(d);  // the deals we already have show straight away, even while the worker is still reading
+      if (refresh && !d.started && !(d.job && d.job.active))
+        flash(d.job && d.job.status === "failed" ? d.job.message : "Already updated a few minutes ago.", d.job && d.job.status === "failed" ? "err" : "warn");
+      else if (refresh) flash("Reading the articles in the background. Deals below update as they finish.", "warn");
+      if (d.job && d.job.active) { dealsPolls = 0; pollDeals(); }
+    }
+
+    // Market pulse: SA news + sentiment, calendar, outlook, technicals.
+    const MOOD = { positive: ["positive", "ok"], negative: ["negative", "warn"], mixed: ["mixed", ""], neutral: ["neutral", "muted"] };
+    const TOPIC = { jse: "JSE", rand: "Rand", sarb: "SARB & rates", economy: "SA economy" };
+    let pulseData = null;
+    async function loadPulse(target, compact, refresh = false) {
+      const box = $(target);
+      if (!box) return;
+      try { pulseData = await api.pulse(refresh); } catch (e) { box.innerHTML = ""; return; }
+      renderPulse(box, pulseData, compact);
+    }
+    function renderPulse(box, p, compact) {
+      const o = p.outlook, sent = p.sentiment, total = (sent.positive + sent.negative + sent.neutral) || 1;
+      const news = Object.entries(p.news).filter(([, v]) => v.length);
+      const bar = `<div class="sent-bar" role="img" aria-label="${sent.positive} positive, ${sent.neutral} neutral, ${sent.negative} negative headlines">
+        <span style="width:${sent.positive / total * 100}%;background:var(--pos)"></span><span style="width:${sent.neutral / total * 100}%;background:var(--muted)"></span>
+        <span style="width:${sent.negative / total * 100}%;background:var(--neg)"></span></div>
+        <small class="muted">${sent.positive} positive · ${sent.neutral} neutral · ${sent.negative} negative headlines</small>`;
+      const cal = p.calendar.slice(0, compact ? 5 : 12).map(e => `<li><strong>${day(e.date)}</strong> ${esc(e.event)} <small class="muted">${esc(e.country)}</small>
+        <br><small>${esc(e.expect || e.why || "")}${e.link ? ` · <a href="${esc(e.link)}" target="_blank" rel="noopener">${esc(e.source || "source")}</a>` : e.rule ? " · usual schedule" : ""}</small></li>`).join("");
+      const heads = (items) => items.map(a => `<li><a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.title)}</a> ${badge(...MOOD[a.sentiment])}
+        <br><small class="muted">${esc(a.source)}${a.date ? ` · ${a.date}` : ""}</small></li>`).join("");
+      const tech = Object.entries(p.technical).map(([sym, t]) => `<div class="card tech-card" data-sym="${esc(sym)}"><strong>${esc(t.label)}</strong> ${badge(t.bias, t.bias === "up" ? "ok" : t.bias === "down" ? "warn" : "")}
+        <div class="value" style="font-size:1.2rem;font-weight:700">${amount(t.last)}</div><small class="muted">${t.change_1m != null ? pct(t.change_1m) + " in a month · " : ""}RSI ${t.rsi ?? "—"}</small></div>`).join("");
+      box.innerHTML = `<div class="card pulse"><div class="ai-head"><h3>Market pulse: South Africa</h3>
+        <div class="row">${o?.mood ? badge(...MOOD[o.mood]) : ""}<button class="secondary small pulse-refresh">Refresh</button></div></div>
+        <small class="muted">Updated ${day(p.built_at)} ${p.built_at.slice(11, 16)} UTC${p.sources.news ? "" : " · add SERPAPI_KEYS for live news"}</small>
+        ${o ? `<div class="outlook"><h4>What we expect <small class="muted">(an outlook, not advice)</small></h4>
+          <p><strong>Rand:</strong> ${esc(o.rand || "")}</p><p><strong>JSE:</strong> ${esc(o.jse || "")}</p>
+          ${o.watch?.length ? `<p><strong>Watch:</strong> ${o.watch.map(esc).join(" · ")}</p>` : ""}</div>` : ""}
+        <div class="pulse-grid">
+          <div><h4>Coming up</h4><ul class="plain">${cal || `<li class="muted">No dated events yet.</li>`}</ul></div>
+          <div><h4>News mood</h4>${news.length ? bar : `<p class="muted">No news yet.</p>`}
+            ${compact ? `<ul class="plain">${heads(news.flatMap(([, v]) => v).slice(0, 5))}</ul>` : ""}</div>
+        </div>
+        ${compact ? `<p><a href="#markets">More news and the technical charts on Markets →</a></p>`
+          : `${news.map(([k, v]) => `<details class="section"><summary><span>${esc(TOPIC[k] || k.replace(/^h:/, ""))}</span><span class="count">${v.length}</span></summary><ul class="plain">${heads(v)}</ul></details>`).join("")}
+             <h4>Technicals</h4><div class="grid">${tech}</div>`}</div>`;
+      $(".pulse-refresh", box).addEventListener("click", async (e) => {
+        e.target.disabled = true; flash("Fetching the latest news…", "warn");
+        await loadPulse("#" + box.id, compact, true); flash("Market pulse updated.");
+      });
+      if (!compact) {
+        $$(".tech-card", box).forEach(c => c.addEventListener("click", () => { $("#tech-pick").value = c.dataset.sym; loadTech(c.dataset.sym); }));
+        setupTech(p);
+      }
+    }
+    async function setupTech(p) {
+      const s = await api.investSummary().catch(() => ({ holdings: [] }));
+      const opts = [...Object.entries(p.technical).map(([k, t]) => [k, t.label]),
+        ...s.holdings.filter(h => h.symbol && /\.|^[A-Z]{1,5}$/.test(h.symbol) && h.asset_class !== "easyproperties").slice(0, 15).map(h => [h.symbol, h.name || h.symbol])];
+      $("#tech-pick").innerHTML = opts.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join("");
+      $("#tech-wrap").hidden = !opts.length;
+      if (opts.length) loadTech(opts[0][0]);
+    }
+    async function loadTech(sym) {
+      const t = await api.technical(sym);
+      if (!t.series) { $("#tech-reads").textContent = "Not enough price history for this one."; return; }
+      $("#tech-title").textContent = `Technical view: ${t.name || sym}`;
+      $("#tech-reads").textContent = t.reads.join(" · ");
+      const labels = t.series.dates.map(d => d.slice(5));
+      const line = (label, data, colour, extra = {}) => ({ label, data, borderColor: colour, backgroundColor: colour, borderWidth: 1.5, pointRadius: 0, tension: 0.15, spanGaps: true, ...extra });
+      chart("#tech-chart", { type: "line", data: { labels, datasets: [
+          line("Price", t.series.close, css("--series-1"), { borderWidth: 2 }), line("50-day average", t.series.sma50, css("--series-2")),
+          line("Upper band", t.series.bb_upper, css("--muted"), { borderDash: [4, 4] }), line("Lower band", t.series.bb_lower, css("--muted"), { borderDash: [4, 4] })] },
+        options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { display: false },
+          tooltip: { ...tooltip, callbacks: { label: (c) => ` ${c.dataset.label}: ${amount(c.parsed.y)}` } } },
+          scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6 } }, y: { ticks: { maxTicksLimit: 5 } } } } });
+      chart("#rsi-chart", { type: "line", data: { labels, datasets: [line("RSI", t.series.rsi, css("--series-1"), { borderWidth: 2 }),
+          line("70", labels.map(() => 70), css("--neg"), { borderDash: [3, 3], borderWidth: 1 }), line("30", labels.map(() => 30), css("--pos"), { borderDash: [3, 3], borderWidth: 1 })] },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip }, scales: { x: { display: false }, y: { min: 0, max: 100, ticks: { stepSize: 30 } } } } });
+      chart("#macd-chart", { type: "bar", data: { labels, datasets: [{ label: "MACD histogram", data: t.series.macd_hist,
+          backgroundColor: t.series.macd_hist.map(v => v >= 0 ? css("--pos") : css("--neg")) }] },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip }, scales: { x: { display: false }, y: { ticks: { maxTicksLimit: 4 } } } } });
+    }
+    $("#tech-pick").addEventListener("change", (e) => loadTech(e.target.value).catch(err => flash(err.message, "err")));
+
+    // Reports: any period, printable.
+    const iso = (d) => d.toISOString().slice(0, 10);
+    function presetRange(v) {
+      const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+      const back = (n) => [new Date(y, m - n + 1, 1), now];
+      const taxStart = m >= 2 ? y : y - 1;  // SA tax year: 1 March to end February
+      return ({
+        "this-month": [new Date(y, m, 1), now], "last-month": [new Date(y, m - 1, 1), new Date(y, m, 0)],
+        "3m": back(3), "6m": back(6), "12m": back(12),
+        tax: [new Date(taxStart, 2, 1), now], "last-tax": [new Date(taxStart - 1, 2, 1), new Date(taxStart, 2, 0)],
+      })[v];
+    }
+    function syncPreset() {
+      const r = presetRange($("#rep-preset").value);
+      if (r) { $("#rep-start").value = iso(new Date(r[0].getTime() - r[0].getTimezoneOffset() * 60000)); $("#rep-end").value = iso(new Date(r[1].getTime() - r[1].getTimezoneOffset() * 60000)); }
+    }
+    $("#rep-preset").addEventListener("change", () => { syncPreset(); if ($("#rep-preset").value !== "custom") makeReport(); });
+    ["#rep-start", "#rep-end"].forEach(id => $(id).addEventListener("change", () => { $("#rep-preset").value = "custom"; }));
+    action($("#rep-make"), () => makeReport());
+    $("#rep-print").addEventListener("click", () => window.print());
+    async function loadReports() { if (!$("#rep-start").value) syncPreset(); if (!$("#report-doc").innerHTML) await makeReport(); }
+    async function makeReport() {
+      const r = await api.report($("#rep-start").value, $("#rep-end").value);
+      const nw = r.net_worth, inv = r.investments, b = r.banking;
+      const row = (k, v, cls = "") => `<tr><td>${k}</td><td class="num ${cls}">${v}</td></tr>`;
+      const tbl = (rows) => `<table class="rep-table"><tbody>${rows.join("")}</tbody></table>`;
+      const list = (items, fmt) => items.length ? `<table class="rep-table"><tbody>${items.map(fmt).join("")}</tbody></table>` : `<p class="muted">Nothing in this period.</p>`;
+      const change = nw.start_month != null && nw.end_month != null ? nw.end_month - nw.start_month : null;
+      $("#report-doc").innerHTML = `
+        <header class="rep-head"><div><h1>Finance report</h1><p>${esc(r.name)} · ${day(r.period.start)} to ${day(r.period.end)}</p></div>
+          <div class="rep-brand">Charlie'$ Lab<br><small>Made ${day(r.generated_at)}</small></div></header>
+        <section class="rep-kpis">
+          <div><small>Net worth now</small><b>${money(nw.now)}</b>${change != null ? `<small class="${change < 0 ? "neg" : "pos"}">${change < 0 ? "▼" : "▲"} ${money(Math.abs(change))} over the period</small>` : ""}</div>
+          <div><small>Money in</small><b>${money(b.income)}</b></div>
+          <div><small>Spending</small><b>${money(b.spending)}</b>${b.saved_pct != null ? `<small>${b.saved_pct}% kept</small>` : ""}</div>
+          <div><small>Investments</small><b>${money(inv.worth)}</b><small>${inv.return_pct}% all-time return</small></div>
+        </section>
+        <section><h2>Key insights</h2><ul class="rep-insights">${r.insights.map(i => `<li>${esc(i)}</li>`).join("") || "<li>Not enough data yet.</li>"}</ul>
+          <div id="rep-ai"><h3>AI insights for this period</h3><p class="muted">Reading your numbers…</p></div></section>
+        <section class="rep-grid">
+          <div><h2>Net worth</h2>${tbl([row("Investments", money(nw.parts.investments)), row("Own property", money(nw.parts.own_property)),
+            row("Bank", money(nw.parts.bank)), row("Debt", nw.parts.debt ? "−" + money(nw.parts.debt) : money(0), nw.parts.debt ? "neg" : ""), row("<b>Net worth</b>", `<b>${money(nw.now)}</b>`)])}
+            <div class="chart-box short"><canvas id="rep-nw" role="img" aria-label="Net worth per month"></canvas></div></div>
+          <div><h2>Banking</h2>${tbl([row("Money in", money(b.income), "pos"), row("Spending (incl. fees)", money(b.spending), "neg"),
+            row("Bank fees", money(b.fees), "neg"), row("Into investments", money(b.invested)), row("Back from investments", money(b.from_investments)),
+            row("Moved between your own accounts", money(b.moved_between_own))])}
+            <div class="chart-box short"><canvas id="rep-io" role="img" aria-label="Money in and out per month"></canvas></div></div>
+        </section>
+        <section class="rep-grid">
+          <div><h2>Where the money went</h2>${list(b.categories, c => row(esc(c.name), money(c.amount)))}</div>
+          <div><h2>Top merchants</h2>${list(b.merchants, c => row(esc(c.name), money(c.amount)))}</div>
+        </section>
+        <section><h2>Biggest payments</h2>${list(b.biggest, t => `<tr><td>${t.date}</td><td>${esc(t.what)}<br><small class="muted">${esc(t.category)}</small></td><td class="num neg">${money(t.amount)}</td></tr>`)}</section>
+        <section class="rep-grid">
+          <div><h2>Investments</h2>${tbl([row("Worth now", money(inv.worth)), row("Net money put in (period)", money(inv.net_put_in)),
+            row("Dividends (period)", money(inv.dividends), "pos"), row("Interest (period)", money(inv.interest), "pos"),
+            row("Fees (period)", money(inv.fees), "neg"), row("Tax (period)", money(inv.tax), "neg"),
+            row("Money put in (all time)", money(inv.money_put_in_all_time)), row("Gain (all time)", signed(inv.gain_all_time))])}</div>
+          <div><h2>Top holdings</h2>${list(inv.top_holdings, h => `<tr><td>${esc(h.name)}</td><td class="num">${money(h.value)}<br><small class="muted">${h.weight}% · ${h.gain_pct >= 0 ? "+" : ""}${h.gain_pct}%</small></td></tr>`)}</div>
+        </section>
+        <section><h2>Property & debt</h2>${tbl([row("Property equity", money(r.property.equity)), row("EasyProperties", money(r.property.easyproperties)),
+          ...r.property.own.map(p => row(esc(p.name), `${money(p.worth)} · bond ${money(p.bond)}`)), row("Debt", money(r.debt.total), "neg")])}</section>
+        <footer class="rep-foot">Figures from EasyEquities, your bank statements and what you entered in C-Lab. Not financial advice.</footer>`;
+      const months = nw.series.map(x => monthLabel(x.month));
+      chart("#rep-nw", { type: "line", data: { labels: months, datasets: [{ label: "Net worth", data: nw.series.map(x => x.net_worth),
+        borderColor: css("--series-1"), backgroundColor: css("--series-1"), borderWidth: 2, pointRadius: 2, tension: 0.25 }] },
+        options: { maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip }, scales: { x: { grid: { display: false } }, y: { ticks: { callback: randTick, maxTicksLimit: 4 } } } } });
+      upDownChart("#rep-io", b.months.map(x => x.month), b.months.map(x => x.in), b.months.map(x => x.out), "In", "Out");
+      const box = $("#rep-ai"), fallback = r.ai.map(a => ({ title: a.title, detail: a.detail }));
+      const show = (items, note) => {
+        box.innerHTML = `<h3>AI insights for this period</h3>${items.length ? `<ol class="rep-insights">${items.map(a => `<li><b>${esc(a.title)}</b>: ${esc(a.detail)}</li>`).join("")}</ol>` : ""}
+          <p class="muted"><small>${note}</small></p>`;
+      };
+      api.reportAI(r.period.start, r.period.end)
+        .then(a => show(a.items, `AI read of the figures above${a.cached ? " (saved)" : ""}. Not financial advice.`))
+        .catch(e => show(fallback, fallback.length ? `Couldn't read this period (${esc(e.message)}); showing your latest AI suggestions.` : esc(e.message)));
+    }
+
+    // Dividend calendar: declared dividends plus expected ones guessed from each company's past payouts
+    const CONF = { high: ["paid here 3+ years", "ok"], medium: ["paid here 2 years", ""], low: ["seen once", "warn"] };
+    const CAL_STATUS = { declared: ["declared", "ok"], paid: ["paid", "muted"], expected: ["expected", ""], late: ["not declared yet", "warn"] };
+    let calData = null;
+    function monthBlock(m, how, open) {
+      const rows = m.items.map(x => `<tr class="${x.status === "paid" ? "dim" : ""}"><td>${esc(x.instrument)}<br><small class="muted">${x.account ? esc(x.account) + " account" : ""}${x.symbol ? `${x.account ? " · " : ""}${esc(x.symbol)}` : ""}${x.mine ? " · " + MINE[x.mine][0] : ""}</small></td>
+            <td class="num">${x.status === "expected" || x.status === "late" ? "~" : ""}${divAmt(x)}${x.estimate != null ? `<br><small class="muted">${units(x.units)} units → ${money(x.estimate)}</small>` : ""}${x.change != null ? `<br><small class="${x.change < 0 ? "neg" : "pos"}">${x.change >= 0 ? "+" : ""}${(x.change * 100).toFixed(0)}% on last year</small>` : ""}</td>
+            <td>${x.status === "expected" || x.status === "late" ? "~" : ""}${dayOr(x.ldt)}</td><td>${x.pay_date ? (x.status === "expected" || x.status === "late" ? "~" : "") + day(x.pay_date) : "—"}</td>
+            <td>${badge(...CAL_STATUS[x.status])}${x.confidence ? `<br>${badge(...CONF[x.confidence])}` : ""}${x.seen?.length && x.confidence ? `<br><small class="muted">before: ${esc(x.seen.join(", "))}</small>` : ""}</td></tr>`).join("");
+      const got = m.received_items?.length
+        ? `<p style="margin:0.5rem 0 0">You received: ${m.received_items.map(r => `${esc(r.instrument)} <strong>${money(r.amount)}</strong> <small class="muted">${day(r.date)}</small>`).join(" · ")}</p>`
+        : m.received ? `<p style="margin:0.5rem 0 0">Your income tracker shows <strong>${money(m.received)}</strong> in dividends and interest this month.</p>` : "";
+      const past = m.period !== "upcoming";
+      return `<details class="section" id="cal-${m.month}"${open ? " open" : ""}>
+        <summary><span>${esc(m.label)}${m.income ? ` · <span class="pos">~${money(m.income)}</span> to you` : ""}${m.received ? ` · <span class="pos">received ${money(m.received)}</span>` : ""}</span><span class="count">${m.items.length}</span></summary>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>What</th><th class="num">Dividend</th><th>Last day to trade</th><th>Paid</th><th>${past ? "Status" : "How sure"}</th></tr></thead>
+          <tbody>${rows || empty(5, how !== "all" ? "Nothing here with this filter." : past ? "No payouts on record this month. Press Refresh to read the older articles." : "Nothing paid around this month before.")}</tbody></table>${got}</div></details>`;
+    }
+    function renderCalendar() {
+      const how = $("#cal-show").value, host = $("#cal-months");
+      const first = !host.children.length, was = new Set(Array.from(host.querySelectorAll("details[open]")).map(d => d.id));
+      const keep = (x) => how === "mine" ? !!x.mine : how === "declared" ? ["declared", "paid"].includes(x.status) : true;
+      const filt = (list) => list.map(m => ({ ...m, items: m.items.filter(keep) }));
+      const months = filt(calData.months), history = filt(calData.history || []);
+      const top = Math.max(1, ...months.map(m => m.items.length));
+      $("#cal-strip").innerHTML = months.map(m => `<a class="cal-cell${m.items.length ? "" : " none"}" href="#calendar" data-m="${m.month}">
+        <span>${esc(m.label.split(" ")[0])}</span><i style="height:${Math.round(m.items.length / top * 100)}%"></i>
+        <small>${m.items.length || ""}</small></a>`).join("");
+      const isOpen = (m, i) => first ? i === 0 || (m.income && i < 3) : was.has(`cal-${m.month}`);
+      const group = (title, list, id, open) => list.length ? `<details class="section" id="${id}"${(first ? open : was.has(id)) ? " open" : ""}>
+        <summary><span><strong>${title}</strong></span><span class="count">${list.reduce((n, m) => n + m.items.length, 0)}</span></summary>
+        ${list.slice().reverse().map(m => monthBlock(m, how, was.has(`cal-${m.month}`))).join("")}</details>` : "";
+      const thisYear = history.filter(m => m.period === "this_year"), lastYear = history.filter(m => m.period === "last_year");
+      const noHistory = !(calData.history || []).some(m => m.items.length);
+      host.innerHTML = `<h3 style="margin:0.4rem 0">Coming up</h3>${months.map((m, i) => monthBlock(m, how, isOpen(m, i))).join("")}
+        <h3 style="margin:1rem 0 0.4rem">What was paid</h3>
+        ${noHistory ? `<div class="callout info"><span class="cl-icon" aria-hidden="true">i</span><p><b class="cl-tag">Info</b> No earlier payouts on record yet. Press Refresh and the worker reads last year's and this year's articles.</p></div>` : ""}
+        ${group("Earlier this year", thisYear, "cal-g-this", true)}${group("Last year", lastYear, "cal-g-last", false)}`;
+      $$("#cal-strip .cal-cell").forEach(a => a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const d = $(`#cal-${a.dataset.m}`);
+        d.open = true;
+        d.scrollIntoView({ behavior: "smooth", block: "start" });
+      }));
+    }
+    $("#cal-show").addEventListener("change", () => calData && renderCalendar());
+    let calTimer = null, calPolls = 0, calWasActive = false;
+    function paintCalJob(job) {
+      const b = $("#cal-refresh");
+      b.disabled = !!job.active;
+      b.textContent = job.active ? (job.total ? `Reading ${job.done}/${job.total}` : "Reading…") : "Refresh";
+      $("#cal-job").textContent = job.active ? (job.message || "Working in the background…")
+        : job.status === "failed" ? `Last refresh failed: ${job.message}` : job.status === "done" ? `Last refresh: ${job.message}` : "";
+      if (calWasActive && !job.active) flash(job.status === "failed" ? job.message : "Calendar updated.", job.status === "failed" ? "err" : "ok");
+      calWasActive = !!job.active;
+      clearTimeout(calTimer);
+      if (job.active && calPolls++ < 120) calTimer = setTimeout(() => { if (!$("#calendar").hidden) loadCalendar().catch(() => paintCalJob(job)); }, 5000);
+    }
+    async function refreshCalendar() {
+      $("#cal-refresh").disabled = true;
+      try {
+        const r = await api.refreshCalendar();
+        if (!r.started && !r.job.active) flash(r.job.status === "failed" ? r.job.message : "Already refreshed within the last hour.", r.job.status === "failed" ? "err" : "warn");
+        else flash("Reading last year's and this year's articles in the background. What's here stays on screen.", "warn");
+      } catch (e) { flash(e.message, "err"); }
+      calPolls = 0;
+      await loadCalendar();
+    }
+    $("#cal-refresh").addEventListener("click", refreshCalendar);
+    async function loadCalendar() {
+      calData = await api.dividendCalendar();
+      $("#cal-warning").textContent = calData.warning;
+      const all = calData.months.flatMap(m => m.items), mine = all.filter(x => x.mine === "hold");
+      const kpi = (label, value, sub = "") => `<div class="card stat"><div class="value">${value}</div><div class="label">${label}${sub ? `<br>${sub}` : ""}</div></div>`;
+      const best = [...calData.months].sort((a, b) => b.income - a.income)[0];
+      $("#cal-kpis").innerHTML = kpi("Expected to you, next 12 months", money(calData.income), mine.length ? `${mine.length} payouts from your holdings` : "no dividends from your holdings found") +
+        kpi("Received this year", money(calData.received_this_year), `last year ${money(calData.received_last_year)}`) +
+        kpi("Declared", all.filter(x => ["declared", "paid"].includes(x.status)).length, `${all.length - all.filter(x => ["declared", "paid"].includes(x.status)).length} more expected`) +
+        kpi("Biggest month for you", best?.income ? esc(best.label) : "—", best?.income ? `~${money(best.income)}` : "") +
+        kpi("Companies", calData.companies, "from EasyEquities' updates, your holdings and watchlist");
+      renderCalendar();
+      paintCalJob(calData.job || {});
+    }
+
+    // pages
+    const LOAD = { markets: loadMarkets, calendar: loadCalendar, overview: loadSummary, easyequities: loadEE, google: loadEE, holdings: loadSummary,
+      transactions: loadTxns, banking: loadBank, watchlist: loadWatch, ai: loadChat, reports: loadReports, property: loadProps, profile: loadAccount };
+    const ALIAS = { account: "profile" };
+    function show() {
+      const hash = location.hash.slice(1), id = LOAD[hash] ? hash : ALIAS[hash] || "ai";
+      $$("main section").forEach(s => s.hidden = s.id !== id);
+      document.body.classList.toggle("immersive", id === "ai");
+      setActive(id);
+      LOAD[id]().catch(e => flash(e.message, "err"));
+      loadSuggestions(id).catch(() => {});
+    }
+    // Onboarding: the app stays locked until email and ID are green. EasyEquities, Google and statements are optional and can be finished later.
+    async function gate() {
+      let st;
+      try { st = await api.onboarding(); } catch { return true; }  // API down: don't lock people out of what's cached
+      if (st.complete) {
+        $("#onboard").hidden = true; document.body.classList.remove("locked");
+        let told = false; try { told = sessionStorage.getItem("clab_ob_told") === "1"; } catch { /* ignore */ }
+        if (st.pending_optional?.length && !told) {
+          try { sessionStorage.setItem("clab_ob_told", "1"); } catch { /* ignore */ }
+          flash("Finish connecting EasyEquities and Google any time from the EasyEquities page to bring in your holdings and statements.", "warn");
+        }
+        return true;
+      }
+      renderOnboard(st);
+      return false;
+    }
+    function renderOnboard(st) {
+      document.body.classList.add("locked");
+      $("#onboard").hidden = false;
+      $("#ob-name").textContent = st.name ? `, ${st.name}` : "";
+      Object.entries(st.steps).forEach(([k, v]) => {
+        const li = $(`.ob-step[data-step="${k}"]`);
+        li.classList.toggle("done", v.done);
+        $(".ob-detail", li).textContent = v.done ? `✓ ${v.detail || "done"}` : v.detail ? `${v.required ? "Not working yet" : "Not working yet (you can skip this and fix it later)"}: ${v.detail}` : "";
+        $$(".ob-form", li).forEach(f => f.hidden = v.done);
+      });
+      $("#ob-open").disabled = !st.complete;
+    }
+    onSubmit($("#ob-id"), async (d) => renderOnboard(await api.onboardingId(d.id_number)));
+    action($("#ob-email-send"), async () => { renderOnboard(await api.emailSend()); flash("Code sent. Check your inbox (and spam)."); $("#ob-email").code.focus(); });
+    onSubmit($("#ob-email"), async (d, e) => { renderOnboard(await api.emailVerify(d.code)); e.target.reset(); });
+    onSubmit($("#ob-ee"), async (d, e) => {
+      flash("Signing in to EasyEquities… this can take a minute.", "warn");
+      await api.eeConnectPlatform(d).catch(err => flash(err.message, "err"));
+      e.target.password.value = "";
+      const st = await api.onboarding(); renderOnboard(st);
+      if (!st.steps.easyequities.done) flash("EasyEquities didn't accept that login. Check it and try again.", "err");
+    });
+    action($("#ob-google"), async () => { const { url } = await api.eeGoogleStart(); location.href = url; });
+    action($("#ob-statements"), async () => {
+      flash("Looking for your statements and opening them with your ID… this can take a minute.", "warn");
+      const st = await api.onboardingStatements();
+      renderOnboard(st);
+      flash(st.steps.statements.done ? "Statements open. You're in." : st.steps.statements.detail || "No statements found yet: connect EasyEquities and Google first.",
+        st.steps.statements.done ? "ok" : "err");
+    });
+    $("#ob-open").addEventListener("click", async () => { if (await gate()) { location.hash = "#ai"; show(); } });
+    $("#ob-logout").addEventListener("click", () => { try { localStorage.removeItem("clab_access"); localStorage.removeItem("clab_refresh"); } catch { /* ignore */ } location.href = "/login.html"; });
+    addEventListener("hashchange", () => { if (!document.body.classList.contains("locked")) show(); });
+    gate().then(ok => ok && show());
+  </script>
+</body>
+</html>

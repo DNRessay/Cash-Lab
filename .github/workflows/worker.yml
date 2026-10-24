@@ -1,0 +1,45 @@
+name: Worker
+
+# Heavy scraping, started by the API's Refresh buttons (or by hand: Actions > Worker > Run workflow).
+# It reads articles with spaCy and writes into the same database the API uses.
+
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: What to run
+        required: true
+        type: choice
+        options: [deals, calendar]
+
+concurrency:
+  group: worker-${{ inputs.job }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      JOB: ${{ inputs.job }}
+      DATABASE_URL: ${{ secrets.CLAB_DATABASE_URL || secrets.DATABASE_URL || secrets.NEON_DATABASE_URL }}
+      GROQ_API_KEYS: ${{ secrets.CLAB_GROQ_API_KEYS || secrets.GROQ_API_KEYS || secrets.GROQ_API_KEY }}
+      SERPAPI_KEYS: ${{ secrets.CLAB_SERPAPI_KEYS || secrets.SERPAPI_KEYS || secrets.SERPAPI_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check database secret
+        run: '[ -n "$DATABASE_URL" ] || { echo "::error::Missing GitHub secret for DATABASE_URL"; exit 1; }'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-worker.txt
+      - run: pip install -r requirements-worker.txt
+      - run: python -m spacy download en_core_web_sm
+      - run: python -m app.invest.worker "$JOB"
+      - name: Tell the page it failed
+        if: failure()
+        run: python -m app.invest.worker fail "$JOB"

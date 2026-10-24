@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Create account — C-Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main class="narrow">
+    <div class="card">
+      <h1>Create your C-Lab account</h1>
+      <p class="muted">The first account created owns this app. After that, sign-up is closed except for emails the owner allows.</p>
+      <div id="msg"></div>
+      <form id="form">
+        <div class="fields">
+          <div class="field"><label>First name</label><input name="first_name" required /></div>
+          <div class="field"><label>Last name</label><input name="last_name" /></div>
+        </div>
+        <div class="field"><label>Email</label><input name="email" type="email" required autocomplete="email" /></div>
+        <div class="field"><label>Password</label><input name="password" type="password" required minlength="8" autocomplete="new-password" /></div>
+        <div class="field"><label>SA ID number</label><input name="id_number" inputmode="numeric" required maxlength="16" autocomplete="off" placeholder="13 digits" />
+          <small id="id-check" class="muted">Checked here, stored encrypted, and used to open your EasyEquities and bank statements, so you only give it once.</small></div>
+        <button type="submit" style="width:100%">Create account</button>
+      </form>
+      <p class="muted" style="font-size:0.85rem"><a href="/login.html">Back to log in</a></p>
+    </div>
+  </main>
+  <script type="module">
+    import { api, tokens } from "/js/api.js";
+    import { $, flash, guestPage, onSubmit } from "/js/ui.js";
+    guestPage();
+    // Same check as the server: real YYMMDD birth date, citizenship digit 0/1, Luhn check digit.
+    function idProblem(raw) {
+      const n = raw.replace(/\D/g, "");
+      if (n.length !== 13) return "An SA ID number has 13 digits.";
+      const yy = +n.slice(0, 2), mm = +n.slice(2, 4), dd = +n.slice(4, 6), now = new Date();
+      const year = 2000 + yy <= now.getFullYear() ? 2000 + yy : 1900 + yy, d = new Date(year, mm - 1, dd);
+      if (d.getMonth() !== mm - 1 || d.getDate() !== dd || d > now) return "The first 6 digits must be a real birth date.";
+      if (!"01".includes(n[10])) return "The 11th digit must be 0 or 1.";
+      let sum = 0;
+      [...n].reverse().forEach((c, i) => { let v = +c; if (i % 2) { v *= 2; if (v > 9) v -= 9; } sum += v; });
+      return sum % 10 ? "The check digit doesn't add up. Check for a typo." : "";
+    }
+    const idIn = $("#form").id_number, note = $("#id-check");
+    idIn.addEventListener("input", () => {
+      const p = idIn.value.replace(/\D/g, "").length === 13 ? idProblem(idIn.value) : "";
+      note.textContent = p || (idIn.value.replace(/\D/g, "").length === 13 ? "✓ Valid SA ID number." : note.dataset.base || note.textContent);
+      note.className = p ? "neg" : idIn.value.replace(/\D/g, "").length === 13 ? "pos" : "muted";
+      idIn.setCustomValidity(p);
+    });
+    note.dataset.base = note.textContent;
+    onSubmit($("#form"), async (d) => {
+      try {
+        const r = await api.register(d);
+        tokens.set(r.access, r.refresh);
+        location.href = "/";
+      } catch (e) { flash(e.message, "err"); }
+    });
+  </script>
+</body>
+</html>

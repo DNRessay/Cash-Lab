@@ -1,0 +1,11 @@
+version = 0.1
+
+[default.build.parameters]
+use_container = true
+
+[default.deploy.parameters]
+stack_name = "c-lab-api"
+region = "eu-west-1"
+resolve_s3 = true
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true

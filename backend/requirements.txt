@@ -1,0 +1,14 @@
+fastapi>=0.115
+mangum>=0.19
+sqlalchemy>=2.0
+pydantic>=2.7
+python-multipart>=0.0.9
+PyJWT>=2.8
+requests>=2.32
+psycopg2-binary>=2.9
+python-dotenv>=1.0
+curl_cffi==0.16.3
+beautifulsoup4==4.12.3
+cryptography>=42
+pypdf==6.19.0
+pdfplumber>=0.11

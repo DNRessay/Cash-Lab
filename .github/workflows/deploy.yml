@@ -1,0 +1,163 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", "frontend/**", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-1
+  STACK: c-lab-api
+  PAGES_PROJECT: c-lab
+  CUSTOM_DOMAIN: ${{ vars.CLAB_DOMAIN || '' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.CLAB_DATABASE_URL || secrets.DATABASE_URL || secrets.NEON_DATABASE_URL }}
+      SIGNUP_EMAILS: ${{ vars.SIGNUP_EMAILS || '' }}
+      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+      GOOGLE_CLIENT_ID: ${{ secrets.CLAB_GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.CLAB_GOOGLE_CLIENT_SECRET || secrets.GOOGLE_CLIENT_SECRET }}
+      COHERE_API_KEY: ${{ secrets.CLAB_COHERE_API_KEY || secrets.COHERE_API_KEY }}
+      GROQ_API_KEYS: ${{ secrets.CLAB_GROQ_API_KEYS || secrets.GROQ_API_KEYS || secrets.GROQ_API_KEY }}
+      SERPAPI_KEYS: ${{ secrets.CLAB_SERPAPI_KEYS || secrets.SERPAPI_KEYS || secrets.SERPAPI_KEY }}
+      GH_DISPATCH_TOKEN: ${{ secrets.CLAB_GH_DISPATCH_TOKEN || secrets.GH_DISPATCH_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        run: |
+          missing=0
+          for v in DATABASE_URL CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            if [ -z "${!v}" ]; then echo "::error::Missing GitHub secret for $v"; missing=1; fi
+          done
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then echo "::error::Missing GitHub secret AWS_ACCESS_KEY_ID"; missing=1; fi
+          exit $missing
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      # Signs logins and encrypts stored secrets, so it must never change: generated once, kept in SSM.
+      - name: App secret key
+        run: |
+          if KEY=$(aws ssm get-parameter --name /c-lab/secret-key --with-decryption --query Parameter.Value --output text 2>/dev/null); then
+            echo "Using existing secret key"
+          else
+            KEY=$(python -c "import secrets; print(secrets.token_urlsafe(48))")
+            aws ssm put-parameter --name /c-lab/secret-key --type SecureString --value "$KEY" >/dev/null
+            echo "Created new secret key"
+          fi
+          echo "::add-mask::$KEY"
+          echo "SECRET_KEY=$KEY" >> "$GITHUB_ENV"
+
+      - name: Cloudflare Pages project
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects"
+          auth="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+          if ! curl -sf -H "$auth" "$api/$PAGES_PROJECT" -o project.json; then
+            curl -sf -X POST -H "$auth" -H "Content-Type: application/json" "$api" \
+              -d "{\"name\":\"$PAGES_PROJECT\",\"production_branch\":\"main\"}" -o project.json
+          fi
+          SUB=$(python -c "import json; print(json.load(open('project.json'))['result']['subdomain'])")
+          FRONT="https://$SUB"
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            # Attach (no-op when already attached). Logins only move to it once Cloudflare says it's live.
+            curl -s -X POST -H "$auth" -H "Content-Type: application/json" "$api/$PAGES_PROJECT/domains" \
+              -d "{\"name\":\"$CUSTOM_DOMAIN\"}" -o /dev/null || true
+            ST=$(curl -s -H "$auth" "$api/$PAGES_PROJECT/domains/$CUSTOM_DOMAIN" | python -c "import json,sys; print((json.load(sys.stdin).get('result') or {}).get('status'))" || true)
+            echo "$CUSTOM_DOMAIN: $ST"
+            [ "$ST" = "active" ] && FRONT="https://$CUSTOM_DOMAIN"
+          fi
+          echo "PAGES_URL=https://$SUB" >> "$GITHUB_ENV"
+          echo "FRONTEND_URL=$FRONT" >> "$GITHUB_ENV"
+          echo "Frontend: $FRONT"
+
+      - name: Build backend
+        working-directory: backend
+        run: sam build --use-container
+
+      - name: Deploy backend
+        working-directory: backend
+        run: |
+          sam package --resolve-s3 --region "$AWS_REGION" --output-template-file packaged.yaml
+          origins="$PAGES_URL"
+          [ -n "$CUSTOM_DOMAIN" ] && origins="$origins,https://$CUSTOM_DOMAIN"
+          host="${PAGES_URL#https://}"
+          regex="https://([a-z0-9-]+\\.)?${host//./\\.}"  # preview deploys on *.c-lab.pages.dev
+          params=("SecretKey=$SECRET_KEY" "DatabaseUrl=$DATABASE_URL" "FrontendUrl=$FRONTEND_URL"
+                  "CorsAllowedOrigins=$origins" "CorsOriginRegex=$regex")
+          [ -n "$SIGNUP_EMAILS" ] && params+=("SignupEmails=$SIGNUP_EMAILS")
+          [ -n "$EMAIL_HOST" ] && params+=("EmailHost=$EMAIL_HOST" "EmailHostUser=$EMAIL_HOST_USER" "EmailHostPassword=$EMAIL_HOST_PASSWORD")
+          [ -n "$GOOGLE_CLIENT_ID" ] && params+=("GoogleClientId=$GOOGLE_CLIENT_ID" "GoogleClientSecret=$GOOGLE_CLIENT_SECRET")
+          [ -n "$COHERE_API_KEY" ] && params+=("CohereApiKey=$COHERE_API_KEY")
+          [ -n "$GROQ_API_KEYS" ] && params+=("GroqApiKeys=$GROQ_API_KEYS")
+          [ -n "$SERPAPI_KEYS" ] && params+=("SerpApiKeys=$SERPAPI_KEYS")
+          [ -n "$GH_DISPATCH_TOKEN" ] && params+=("GhDispatchToken=$GH_DISPATCH_TOKEN" "GhRepo=${{ github.repository }}")
+          aws cloudformation deploy --template-file packaged.yaml --stack-name "$STACK" --region "$AWS_REGION" \
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset \
+            --parameter-overrides "${params[@]}"
+          API=$(aws cloudformation describe-stacks --stack-name "$STACK" --region "$AWS_REGION" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          echo "API_URL=${API%/}" >> "$GITHUB_ENV"
+
+      - name: Deploy frontend
+        run: |
+          sed -i "s#^const PROD_API = .*#const PROD_API = \"$API_URL\";#" frontend/js/config.js
+          grep PROD_API frontend/js/config.js
+          npx --yes wrangler@4 pages deploy frontend --project-name "$PAGES_PROJECT" --branch main --commit-dirty=true
+
+      - name: Smoke test
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -sf "$API_URL/api/health" | tee health.json | grep -q '"database":true'; then break; fi
+            sleep 10
+          done
+          cat health.json; echo
+          grep -q '"database":true' health.json
+          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Origin: $FRONTEND_URL" "$API_URL/api/auth/me")
+          [ "$code" = "401" ] || { echo "::error::Expected 401 from /api/auth/me, got $code"; exit 1; }
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Deployed"
+            echo "- Frontend: ${FRONTEND_URL:-n/a}"
+            echo "- API: ${API_URL:-n/a}"
+            } >> "$GITHUB_STEP_SUMMARY"
